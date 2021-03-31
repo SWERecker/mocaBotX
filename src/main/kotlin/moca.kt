@@ -7,15 +7,19 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
 
-class Moca {
+
+class Moca(private val mocaDatabaseInstance: MocaDatabase) {
     val qndxxPath = System.getProperty("user.dir") + File.separator + "resource" + File.separator + "qndxx.txt"
     private val picturePath = "E:${File.separator}mirai${File.separator}pic${File.separator}"
     private val indexFilePath = picturePath + "index.txt"
     val supermanId = arrayOf(565379987L, 1400625889L)
     private val redisPool = JedisPool(JedisPoolConfig())
     private val mocaLogger = MiraiLogger.create("MocaLogger")
+    private val mapMocaCd = mutableMapOf<String, Int>()
 
+    init {
 
+    }
     /**
      * 读取config.txt中的参数
      *
@@ -26,7 +30,7 @@ class Moca {
      *
      * @return Y
      */
-    fun getBotConfig(arg: String): Any {
+    fun getBotConfig(arg: String): String {
         val inStream: InputStream = File("config.txt").inputStream()
         inStream.bufferedReader().useLines { lines ->
             lines.forEach {
@@ -82,4 +86,47 @@ class Moca {
             return peopleCount
         }
     }
+
+    /**
+     * 设置cd
+     *
+     * @param id 群号/QQ号（作为标识符）
+     * @param cdType cd类型
+     * @param cdLength cd长度
+     *
+     */
+    fun setCd(id: Long, cdType: String, cdLength: Int = 0){
+        val currentTimestamp = (System.currentTimeMillis() / 1000).toInt()
+        mocaLogger.info(currentTimestamp.toString())
+        val cdString = "${id}_${cdType}"
+        if (cdLength != 0) {
+            mapMocaCd[cdString] = currentTimestamp + cdLength
+            mocaLogger.info("$cdString set to ${currentTimestamp + cdLength}")
+        }else {
+            val configCdLength = mocaDatabaseInstance.getGroupConfig(id, cdType).toString().toInt()
+            mocaLogger.info(configCdLength.toString())
+            mapMocaCd[cdString] = currentTimestamp + configCdLength
+            mocaLogger.info("$cdString set to ${currentTimestamp + configCdLength}")
+        }
+
+    }
+
+    /**
+     * 判断是否在cd中
+     *
+     * @param id 群号/QQ号（作为标识符）
+     * @param cdType cd类型
+     *
+     * @return 返回true/false（在/不在cd中）
+     */
+    fun isInCd(id: Long, cdType: String): Boolean{
+        val currentTimestamp = (System.currentTimeMillis() / 1000).toInt()
+        println(currentTimestamp)
+        val cdString = "${id}_${cdType}"
+        if (cdString !in mapMocaCd.keys){
+            return false
+        }
+        return currentTimestamp <= mapMocaCd[cdString]!!
+    }
+
 }

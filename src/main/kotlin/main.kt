@@ -19,12 +19,12 @@ fun main() {
 object WithConfiguration {
     @JvmStatic
     fun main(): Unit = runBlocking {
-        val moca = Moca()
         val mocaDB = MocaDatabase()
+        val moca = Moca(mocaDB)
         val mocaLogger = MiraiLogger.create("MocaLogger")
 
-        val botQQ = moca.getBotConfig("QQ").toString().toLong()
-        val botPassword = moca.getBotConfig("PASS").toString()
+        val botQQ = moca.getBotConfig("QQ").toLong()
+        val botPassword = moca.getBotConfig("PASS")
 
         val bot = BotFactory.newBot(botQQ, botPassword) {
             fileBasedDeviceInfo() // 使用 device.json 存储设备信息
@@ -38,7 +38,7 @@ object WithConfiguration {
         bot.eventChannel.subscribeAlways<GroupMessageEvent> { event ->
             // this: GroupMessageEvent
             // event: GroupMessageEvent
-            val groupMessageHandler = MocaGroupMessageHandler(event, subject)
+            val groupMessageHandler = MocaGroupMessageHandler(event, subject, moca)
             val messageContent = this.message.content
             var operationResult = false
 
@@ -51,17 +51,23 @@ object WithConfiguration {
                     operationResult = groupMessageHandler.adminOperations()
                 }
             }
+            if (moca.isInCd(group.id, "replyCD")){
+                operationResult = true
+                mocaLogger.info("Group in cd ${group.id}")
+            }
 
             if (!operationResult) {
                 when {
                     messageContent.contains("使用说明") -> {
                         subject.sendMessage("使用说明：https://mocabot.cn/")
                         operationResult = true
+                        moca.setCd(group.id, "replyCD")
                     }
                     messageContent.contains("青年大学习") -> {
                         val qndxxContent = File(moca.qndxxPath).readText()
                         subject.sendMessage(qndxxContent)
                         operationResult = true
+                        moca.setCd(group.id, "replyCD")
                     }
                 }
             }
@@ -70,6 +76,7 @@ object WithConfiguration {
                 val matchResult = mocaDB.matchKey(group.id, messageContent)
                 if (matchResult.first != "") {
                     operationResult = groupMessageHandler.sendPicture(matchResult)
+                    moca.setCd(group.id, "replyCD")
                 }
             }
         }
