@@ -9,7 +9,6 @@ import net.mamoe.mirai.event.events.*
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.BotConfiguration.MiraiProtocol.ANDROID_PAD
 import net.mamoe.mirai.utils.MiraiLogger
-import java.io.File
 
 
 fun main() {
@@ -35,9 +34,8 @@ object WithConfiguration {
         // bot.getFriend(565379987)?.sendMessage("你好")
         // bot.getGroup(907274961)?.sendMessage("Bot 上线")
 
+
         bot.eventChannel.subscribeAlways<GroupMessageEvent> { event ->
-            // this: GroupMessageEvent
-            // event: GroupMessageEvent
             val groupMessageHandler = MocaGroupMessageHandler(event, subject, moca)
             val messageContent = this.message.content
             var operationResult = false
@@ -47,13 +45,34 @@ object WithConfiguration {
             }
 
             if (!operationResult) {
+                try {
+                    val atMessage = this.message.findIsInstance<At>()
+                    if (atMessage != null) {
+                        operationResult = groupMessageHandler.atOperations()
+                    }
+                } catch (e: NoSuchElementException) {
+                }
+            }
+
+            if (!operationResult) {
                 if (event.sender.permission.isOperator() || event.sender.id in moca.supermanId) {
                     operationResult = groupMessageHandler.adminOperations()
                 }
             }
-            if (moca.isInCd(group.id, "replyCD")){
+
+            if (!operationResult) {
+                when {
+                    messageContent
+                        .replace("老婆", "lp")
+                        .contains("换lp次数") -> {
+                            operationResult = groupMessageHandler.getSenderChangeLpTimes()
+                    }
+                }
+            }
+
+            if (moca.isInCd(group.id, "replyCD")) {
                 operationResult = true
-                mocaLogger.info("Group in cd ${group.id}")
+                mocaLogger.info("Group ${group.id} in cd")
             }
 
             if (!operationResult) {
@@ -64,18 +83,44 @@ object WithConfiguration {
                         moca.setCd(group.id, "replyCD")
                     }
                     messageContent.contains("青年大学习") -> {
-                        val qndxxContent = File(moca.qndxxPath).readText()
-                        subject.sendMessage(qndxxContent)
+                        subject.sendMessage(moca.getBotConfig("QNDXX"))
                         operationResult = true
                         moca.setCd(group.id, "replyCD")
                     }
                 }
             }
 
-            if (!operationResult){
+            if (!operationResult) {
+                val preProcessedContent = messageContent
+                    .replace("我", "w")
+                    .replace("老婆", "lp")
+                    .replace("事", "是")
+                if (preProcessedContent.startsWith("wlp是")) {
+                    val setLpResult = mocaDB.setUserLp(event.group.id, event.sender.id, preProcessedContent)
+                    operationResult = true
+                    subject.sendMessage(setLpResult)
+                }
+            }
+
+            if (!operationResult) {
+                if (messageContent.contains("来点") &&
+                    messageContent
+                        .toLowerCase()
+                        .replace("老婆", "lp")
+                        .contains("lp")
+                ) {
+                    val lpName = mocaDB.getUserLp(event.sender.id)
+                    val imageCount = messageContent.startsWith("多")
+                    val imageParameter = Pair(lpName, imageCount)
+                    operationResult = groupMessageHandler.sendPicture(imageParameter)
+                    moca.setCd(group.id, "replyCD")
+                }
+            }
+
+            if (!operationResult) {
                 val matchResult = mocaDB.matchKey(group.id, messageContent)
                 if (matchResult.first != "") {
-                    operationResult = groupMessageHandler.sendPicture(matchResult)
+                    groupMessageHandler.sendPicture(matchResult)
                     moca.setCd(group.id, "replyCD")
                 }
             }

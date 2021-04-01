@@ -1,15 +1,15 @@
 package me.swe.main
 
+import net.mamoe.mirai.message.data.MessageChain
+import net.mamoe.mirai.message.data.buildMessageChain
 import net.mamoe.mirai.utils.MiraiLogger
 import redis.clients.jedis.JedisPool
 import redis.clients.jedis.JedisPoolConfig
 import java.io.File
-import java.io.FileInputStream
 import java.io.InputStream
 
 
 class Moca(private val mocaDatabaseInstance: MocaDatabase) {
-    val qndxxPath = System.getProperty("user.dir") + File.separator + "resource" + File.separator + "qndxx.txt"
     private val picturePath = "E:${File.separator}mirai${File.separator}pic${File.separator}"
     private val indexFilePath = picturePath + "index.txt"
     val supermanId = arrayOf(565379987L, 1400625889L)
@@ -20,6 +20,7 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
     init {
 
     }
+
     /**
      * 读取config.txt中的参数
      *
@@ -35,8 +36,8 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
         inStream.bufferedReader().useLines { lines ->
             lines.forEach {
                 val line = it.split('=')
-                if(line[0] == arg){
-                    return line[1]
+                if (line[0] == arg) {
+                    return line[1].replace("\\n", "\n")
                 }
             }
         }
@@ -64,7 +65,7 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
     /**
      * 从index.txt加载所有图片路径至Redis数据库
      */
-    suspend fun loadIndexFile(): Int{
+    fun loadIndexFile(): Int {
         redisPool.resource.use { r ->
             r.select(3)
             r.flushDB()
@@ -95,14 +96,14 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
      * @param cdLength cd长度
      *
      */
-    fun setCd(id: Long, cdType: String, cdLength: Int = 0){
+    fun setCd(id: Long, cdType: String, cdLength: Int = 0) {
         val currentTimestamp = (System.currentTimeMillis() / 1000).toInt()
         mocaLogger.info(currentTimestamp.toString())
         val cdString = "${id}_${cdType}"
         if (cdLength != 0) {
             mapMocaCd[cdString] = currentTimestamp + cdLength
             mocaLogger.info("$cdString set to ${currentTimestamp + cdLength}")
-        }else {
+        } else {
             val configCdLength = mocaDatabaseInstance.getGroupConfig(id, cdType).toString().toInt()
             mocaLogger.info(configCdLength.toString())
             mapMocaCd[cdString] = currentTimestamp + configCdLength
@@ -119,14 +120,53 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
      *
      * @return 返回true/false（在/不在cd中）
      */
-    fun isInCd(id: Long, cdType: String): Boolean{
+    fun isInCd(id: Long, cdType: String): Boolean {
         val currentTimestamp = (System.currentTimeMillis() / 1000).toInt()
-        println(currentTimestamp)
         val cdString = "${id}_${cdType}"
-        if (cdString !in mapMocaCd.keys){
+        if (cdString !in mapMocaCd.keys) {
             return false
         }
         return currentTimestamp <= mapMocaCd[cdString]!!
+    }
+
+    /**
+     * 返回换lp次数
+     *
+     * @param userId QQ号
+     *
+     * @return 返回次数
+     */
+    fun getChangeLpTimes(userId: Long): Int {
+        val queryResult = mocaDatabaseInstance.getUserConfig(userId, "clp_time").toString()
+        return try {
+            queryResult.toInt()
+        }catch (e: NumberFormatException){
+            0
+        }
+    }
+
+    fun buildGroupKeywordPicture(): MessageChain {
+        return buildMessageChain {
+
+        }
+    }
+
+    fun buildAllPictureCountPicture(): MessageChain {
+        return buildMessageChain {
+
+        }
+    }
+
+    fun buildGroupCountPicture(): MessageChain {
+        return buildMessageChain {
+
+        }
+    }
+
+    fun sendVoice(): MessageChain {
+        return buildMessageChain {
+
+        }
     }
 
 }
