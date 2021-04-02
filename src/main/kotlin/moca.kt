@@ -104,7 +104,7 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
             mapMocaCd[cdString] = currentTimestamp + cdLength
             mocaLogger.info("$cdString set to ${currentTimestamp + cdLength}")
         } else {
-            val configCdLength = mocaDatabaseInstance.getGroupConfig(id, cdType).toString().toInt()
+            val configCdLength = getGroupConfig(id, cdType).toString().toInt()
             mocaLogger.info(configCdLength.toString())
             mapMocaCd[cdString] = currentTimestamp + configCdLength
             mocaLogger.info("$cdString set to ${currentTimestamp + configCdLength}")
@@ -145,6 +145,38 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
         }
     }
 
+    /**
+     * 从数据库中获取相应群参数.
+     *
+     * @param groupId 群号
+     * @param arg 参数名称
+     *
+     * @return 参数值
+     *
+     */
+    fun getGroupConfig(groupId: Long, arg: String): Any? {
+        if (groupId !in mocaDatabaseInstance.mapGroupConfig.keys) {
+            mocaDatabaseInstance.initGroup(groupId)
+        }
+        val groupConfig = mocaDatabaseInstance.mapGroupConfig[groupId] as Map<*, *>
+        return groupConfig[arg]
+    }
+
+    /**
+     * 获取用户设置的lp
+     *
+     * @param userId 用户QQ号.
+     *
+     * @return 未设置："NOT_SET"; 正常返回设置的lp名称
+     */
+    fun getUserLp(userId: Long): String {
+        val userLp = mocaDatabaseInstance.getUserConfig(userId, "lp") as String
+        if (userLp == "NOT_FOUND") {
+            return "NOT_SET"
+        }
+        return userLp
+    }
+
     fun buildGroupKeywordPicture(): MessageChain {
         return buildMessageChain {
 
@@ -169,4 +201,7 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
         }
     }
 
+    fun setGroupFunction(id: Long, paraName: String, operation: Any): Boolean {
+        return mocaDatabaseInstance.setConfig(id, "GROUP", paraName, operation)
+    }
 }

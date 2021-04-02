@@ -11,6 +11,7 @@ import net.mamoe.mirai.message.data.PlainText
 import net.mamoe.mirai.message.data.buildMessageChain
 import net.mamoe.mirai.utils.MiraiLogger
 import org.bson.Document
+import javax.print.Doc
 
 
 class MocaDatabase {
@@ -18,9 +19,9 @@ class MocaDatabase {
     private val db: MongoDatabase = mongoClient.getDatabase("moca")
     private val colGroupKeyword: MongoCollection<Document> = db.getCollection("group_keyword")
     private val colGroupConfig: MongoCollection<Document> = db.getCollection("group_config")
-    private val colUserConfig: MongoCollection<Document> = db.getCollection("user_config")
+    val colUserConfig: MongoCollection<Document> = db.getCollection("user_config")
     private val mapGroupKeywords = mutableMapOf<Long, Map<String, String>>()
-    private val mapGroupConfig = mutableMapOf<Long, Any>()
+    val mapGroupConfig = mutableMapOf<Long, Any>()
     private val mocaDBLogger = MiraiLogger.create("MocaDBLogger")
 
     /**
@@ -188,7 +189,7 @@ class MocaDatabase {
     private fun loadGroupConfig(groupId: Long) {
         val query = Document()
             .append("group", groupId)
-        val queryResult = colGroupKeyword.find(query)
+        val queryResult = colGroupConfig.find(query)
             .projection(Projections.excludeId())
             .first()
         if (!queryResult.isNullOrEmpty()) {
@@ -197,20 +198,39 @@ class MocaDatabase {
     }
 
     /**
-     * 从数据库中获取相应群参数.
+     * 将相应参数设置到数据库
      *
-     * @param groupId 群号
+     * @param userId QQ号/群号
      * @param arg 参数名称
+     * @param value 要设置的值
      *
-     * @return 参数值
+     * @return 返回修改成功/失败(true/false)
      *
      */
-    fun getGroupConfig(groupId: Long, arg: String): Any? {
-        if (groupId !in mapGroupConfig.keys) {
-            initGroup(groupId)
+    fun setConfig(userId: Long, setType: String, arg: String, value: Any): Boolean {
+        val query = if (setType == "GROUP"){
+            Document()
+                .append("group", userId)
+        }else{
+            Document()
+                .append("qq", userId)
         }
-        val groupConfig = mapGroupConfig[groupId] as Map<*, *>
-        return groupConfig[arg]
+        val operationDocument = Document("${'$'}set", Document(arg, value))
+        val saveResult = if (setType == "GROUP"){
+            colGroupConfig.updateOne(query, operationDocument)
+        }else{
+            colUserConfig.updateOne(query, operationDocument)
+        }
+        if (saveResult.modifiedCount > 0) {
+            mocaDBLogger.info("Set $arg => $value")
+            if (setType == "GROUP"){
+                mocaDBLogger.info("Load $userId config to cache")
+                loadGroupConfig(userId)
+            }
+        } else {
+            mocaDBLogger.info("DB not modified")
+        }
+        return saveResult.modifiedCount > 0
     }
 
     /**
@@ -232,29 +252,6 @@ class MocaDatabase {
             return queryResult[arg]
         }
         return "NOT_FOUND"
-    }
-
-    /**
-     * 将相应参数设置到数据库
-     *
-     * @param userId QQ号
-     * @param arg 参数名称
-     * @param value 要设置的值
-     *
-     * @return 参数值, 未找到时返回"NOT_FOUND"
-     *
-     */
-    private fun setUserConfig(userId: Long, arg: String, value: Any): Boolean {
-        val query = Document()
-            .append("qq", userId)
-        val operationDocument = Document("${'$'}set", Document(arg, value))
-        val saveResult = colUserConfig.updateOne(query, operationDocument)
-        if (saveResult.modifiedCount > 0) {
-            mocaDBLogger.info("Set $arg => $value")
-        } else {
-            mocaDBLogger.info("DB not modified")
-        }
-        return saveResult.modifiedCount > 0
     }
 
     /**
@@ -323,21 +320,6 @@ class MocaDatabase {
     }
 
     /**
-     * 获取用户设置的lp
-     *
-     * @param userId 用户QQ号.
-     *
-     * @return 未设置："NOT_SET"; 正常返回设置的lp名称
-     */
-    fun getUserLp(userId: Long): String {
-        val userLp = getUserConfig(userId, "lp") as String
-        if (userLp == "NOT_FOUND") {
-            return "NOT_SET"
-        }
-        return userLp
-    }
-
-    /**
      * 设置用户的lp
      *
      * @param userId 用户QQ号
@@ -346,7 +328,7 @@ class MocaDatabase {
      */
     fun setUserLp(groupId: Long, userId: Long, preProcessedContent: String): MessageChain {
         val toSetLpName = preProcessedContent.substringAfter("是")
-        val existUserLp = getUserLp(userId)
+        val existUserLp = getUserConfig(userId, "lp") as String
         if (toSetLpName.replace("？", "?")
                 .contains("?") ||
             toSetLpName.contains("谁")
@@ -373,7 +355,7 @@ class MocaDatabase {
         val groupKeyword = getGroupKeyword(groupId)
         return if (toSetLpName in groupKeyword.keys) {
             mocaDBLogger.info("set $userId lp to $toSetLpName")
-            setUserConfig(userId, "lp", toSetLpName)
+            setConfig(userId, "USER",  "lp", toSetLpName)
             buildMessageChain {
                 +At(userId)
                 +PlainText(" 设置lp为：$toSetLpName")

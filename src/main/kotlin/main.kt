@@ -70,9 +70,11 @@ object WithConfiguration {
                 }
             }
 
-            if (moca.isInCd(group.id, "replyCD")) {
-                operationResult = true
-                mocaLogger.info("Group ${group.id} in cd")
+            if (!operationResult) {
+                if (moca.isInCd(group.id, "replyCD")) {
+                    operationResult = true
+                    mocaLogger.info("Group ${group.id} in cd")
+                }
             }
 
             if (!operationResult) {
@@ -109,7 +111,7 @@ object WithConfiguration {
                         .replace("老婆", "lp")
                         .contains("lp")
                 ) {
-                    val lpName = mocaDB.getUserLp(event.sender.id)
+                    val lpName = moca.getUserLp(event.sender.id)
                     val imageCount = messageContent.startsWith("多")
                     val imageParameter = Pair(lpName, imageCount)
                     operationResult = groupMessageHandler.sendPicture(imageParameter)
@@ -148,7 +150,7 @@ object WithConfiguration {
 
         bot.eventChannel.subscribeAlways<MemberJoinEvent> { event ->
             mocaLogger.info("Member join group ${event.group.id}.")
-            if (mocaDB.getGroupConfig(event.group.id, "welcomeNewMemberJoin") == 1) {
+            if (moca.getGroupConfig(event.group.id, "welcomeNewMemberJoin").toString().toInt() == 1) {
                 val toSendMessage = buildMessageChain {
                     +At(event.member)
                     +PlainText(" 欢迎加入 ${event.group.name}！")
