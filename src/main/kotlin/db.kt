@@ -12,6 +12,16 @@ import net.mamoe.mirai.message.data.buildMessageChain
 import net.mamoe.mirai.utils.MiraiLogger
 import org.bson.Document
 import javax.print.Doc
+import java.util.Collections
+
+import java.util.ArrayList
+
+import java.util.Comparator
+
+import java.util.TreeMap
+
+
+
 
 
 class MocaDatabase {
@@ -19,6 +29,7 @@ class MocaDatabase {
     private val db: MongoDatabase = mongoClient.getDatabase("moca")
     private val colGroupKeyword: MongoCollection<Document> = db.getCollection("group_keyword")
     private val colGroupConfig: MongoCollection<Document> = db.getCollection("group_config")
+    val colGroupCount: MongoCollection<Document> = db.getCollection("group_count")
     val colUserConfig: MongoCollection<Document> = db.getCollection("user_config")
     private val mapGroupKeywords = mutableMapOf<Long, Map<String, String>>()
     val mapGroupConfig = mutableMapOf<Long, Any>()
@@ -62,7 +73,7 @@ class MocaDatabase {
      * @return 群组的关键词列表 Map<String, String>
      *
      */
-    private fun getGroupKeyword(groupId: Long): Map<String, String> {
+    fun getGroupKeyword(groupId: Long): Map<String, String> {
         if (groupId !in mapGroupKeywords.keys) {
             initGroup(groupId)
         }
@@ -179,6 +190,31 @@ class MocaDatabase {
     }
 
     /**
+     * 从数据库中获取某群组的次数统计.
+     *
+     * @param groupId 群号
+     *
+     * @return
+     *
+     */
+    fun getGroupCount(groupId: Long): Map<String, String> {
+        val query = Document()
+            .append("group", groupId)
+        val mapSorter = MapSort()
+        val queryResult = colGroupCount.find(query)
+            .projection(Projections.fields(Projections.excludeId(), Projections.exclude("group")))
+            .first()
+        val groupCountMap = mutableMapOf<String, Int>()
+
+        if (!queryResult.isNullOrEmpty()) {
+            queryResult.forEach {
+                groupCountMap[it.key] = it.value as Int
+            }
+        }
+        return mapSorter.mapSortByValue(groupCountMap.toMap())
+    }
+
+    /**
      * 从数据库中获取某群组的参数.
      *
      * @param groupId 群号
@@ -208,22 +244,22 @@ class MocaDatabase {
      *
      */
     fun setConfig(userId: Long, setType: String, arg: String, value: Any): Boolean {
-        val query = if (setType == "GROUP"){
+        val query = if (setType == "GROUP") {
             Document()
                 .append("group", userId)
-        }else{
+        } else {
             Document()
                 .append("qq", userId)
         }
         val operationDocument = Document("${'$'}set", Document(arg, value))
-        val saveResult = if (setType == "GROUP"){
+        val saveResult = if (setType == "GROUP") {
             colGroupConfig.updateOne(query, operationDocument)
-        }else{
+        } else {
             colUserConfig.updateOne(query, operationDocument)
         }
         if (saveResult.modifiedCount > 0) {
             mocaDBLogger.info("Set $arg => $value")
-            if (setType == "GROUP"){
+            if (setType == "GROUP") {
                 mocaDBLogger.info("Load $userId config to cache")
                 loadGroupConfig(userId)
             }
@@ -355,7 +391,7 @@ class MocaDatabase {
         val groupKeyword = getGroupKeyword(groupId)
         return if (toSetLpName in groupKeyword.keys) {
             mocaDBLogger.info("set $userId lp to $toSetLpName")
-            setConfig(userId, "USER",  "lp", toSetLpName)
+            setConfig(userId, "USER", "lp", toSetLpName)
             buildMessageChain {
                 +At(userId)
                 +PlainText(" 设置lp为：$toSetLpName")
@@ -444,5 +480,23 @@ class StringSimilarity {
             }
         }
         return 1 - dif[len1][len2].toFloat() / str1.length.coerceAtLeast(str2.length)
+    }
+}
+class MapSort{
+    fun mapSortByValue(toSortMap: Map<String, Int>): Map<String, String> {
+
+        //自定义比较器
+        val valCmp: Comparator<Map.Entry<String?, Int>> =
+            Comparator<Map.Entry<String?, Int>> { o1, o2 ->
+                // TODO Auto-generated method stub
+                o2.value - o1.value
+            }
+        val list: List<Map.Entry<String, Int>> = ArrayList(toSortMap.entries) //传入maps实体
+        Collections.sort(list, valCmp)
+        val sortedMap = mutableMapOf<String, String>()
+        for (i in list.indices) {
+            sortedMap[list[i].key] = list[i].value.toString()
+        }
+        return sortedMap.toMap()
     }
 }

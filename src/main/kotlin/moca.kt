@@ -1,12 +1,17 @@
 package me.swe.main
 
+
 import net.mamoe.mirai.message.data.MessageChain
 import net.mamoe.mirai.message.data.buildMessageChain
 import net.mamoe.mirai.utils.MiraiLogger
 import redis.clients.jedis.JedisPool
 import redis.clients.jedis.JedisPoolConfig
+import java.awt.*
+import java.awt.image.BufferedImage
 import java.io.File
 import java.io.InputStream
+import javax.imageio.ImageIO
+import java.io.IOException
 
 
 class Moca(private val mocaDatabaseInstance: MocaDatabase) {
@@ -89,6 +94,26 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
     }
 
     /**
+     * 从Redis加载图片数量统计
+     *
+     * @param groupId: 群组ID
+     *
+     * @return 返回排序后的Map
+     */
+    private fun getPictureCount(groupId: Long): Map<String, String>{
+        val groupKeyword = mocaDatabaseInstance.getGroupKeyword(groupId)
+        val pictureCount = mutableMapOf<String, Int>()
+        val mapSorter = MapSort()
+        redisPool.resource.use { r ->
+            r.select(3)
+            groupKeyword.forEach{ (name, _) ->
+                pictureCount[name] = r.scard(name).toInt()
+            }
+        }
+        return mapSorter.mapSortByValue(pictureCount)
+    }
+
+    /**
      * 设置cd
      *
      * @param id 群号/QQ号（作为标识符）
@@ -140,7 +165,7 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
         val queryResult = mocaDatabaseInstance.getUserConfig(userId, "clp_time").toString()
         return try {
             queryResult.toInt()
-        }catch (e: NumberFormatException){
+        } catch (e: NumberFormatException) {
             0
         }
     }
@@ -177,31 +202,112 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
         return userLp
     }
 
-    fun buildGroupKeywordPicture(): MessageChain {
-        return buildMessageChain {
-
-        }
-    }
-
-    fun buildAllPictureCountPicture(): MessageChain {
-        return buildMessageChain {
-
-        }
-    }
-
-    fun buildGroupCountPicture(): MessageChain {
-        return buildMessageChain {
-
-        }
-    }
-
-    fun sendVoice(): MessageChain {
-        return buildMessageChain {
-
-        }
-    }
-
     fun setGroupFunction(id: Long, paraName: String, operation: Any): Boolean {
         return mocaDatabaseInstance.setConfig(id, "GROUP", paraName, operation)
+    }
+
+    fun buildGroupKeywordPicture(groupId: Long): String {
+        val imageMaker = MultiLineTextToImage
+        return imageMaker.buildImage("关键词列表",
+            "${groupId}_keyword.png",
+            mocaDatabaseInstance.getGroupKeyword(groupId)
+        )
+    }
+
+    fun buildGroupPictureCount(groupId: Long): String {
+        val imageMaker = MultiLineTextToImage
+        return imageMaker.buildImage("图片数量统计",
+            "${groupId}_pic_count.png",
+            getPictureCount(groupId)
+        )
+    }
+
+    fun buildGroupCountPicture(groupId: Long): String {
+        val imageMaker = MultiLineTextToImage
+        return imageMaker.buildImage("次数统计",
+            "${groupId}_count.png",
+            mocaDatabaseInstance.getGroupCount(groupId)
+        )
+    }
+
+}
+
+
+object MultiLineTextToImage {
+    @JvmStatic
+    fun buildImage(title: String, toSaveFileName: String, inputMap: Map<String, String>?): String {
+        var inputString = ""
+        inputMap?.forEach {
+            inputString += "${it.key}    ${it.value}\n"
+        }
+        var img = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+        var g2d = img.createGraphics()
+        val toUseFont = Font("", Font.PLAIN, 16)
+        val titleFont = Font("", Font.PLAIN, 24)
+        g2d.dispose()
+        val inputStringArray = inputString.split("\n")
+        var stringLines = 0
+        var maxStringLength = 0
+
+        inputStringArray.forEach {
+            stringLines++
+            if (g2d.fontMetrics.getStringBounds(it, g2d).width.toInt() > maxStringLength) {
+                maxStringLength = g2d.fontMetrics.getStringBounds(it, g2d).width.toInt()
+            }
+        }
+        val imageHeight = stringLines * g2d.getFontMetrics(toUseFont).height + 50
+        val imageWidth = maxStringLength + 400
+        img = BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_ARGB)
+        g2d = img.createGraphics()
+
+        val bgImage: Image = ImageIO.read(File("resource" + File.separator + "bg.png"))
+        val bgImageHeight = bgImage.getHeight(null)
+        val bgImageWidth = bgImage.getWidth(null)
+        var bgImageDrawPosX = 0
+        var bgImageDrawPosY = 0
+        while (bgImageDrawPosY < imageHeight) {
+            while (bgImageDrawPosX < imageWidth) {
+                g2d.drawImage(bgImage, bgImageDrawPosX, bgImageDrawPosY, bgImageWidth, bgImageHeight, null)
+                // println("draw pos: X=$bgImageDrawPosX, Y=$bgImageDrawPosY")
+                bgImageDrawPosX += bgImageWidth
+            }
+            bgImageDrawPosX = 0
+            bgImageDrawPosY += bgImageHeight
+        }
+
+        g2d.setRenderingHint(
+            RenderingHints.KEY_ALPHA_INTERPOLATION,
+            RenderingHints.VALUE_ALPHA_INTERPOLATION_QUALITY
+        )
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        g2d.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_QUALITY)
+        g2d.setRenderingHint(RenderingHints.KEY_DITHERING, RenderingHints.VALUE_DITHER_ENABLE)
+        g2d.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_DEFAULT)
+        g2d.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
+        g2d.color = Color.BLACK
+        g2d.font = titleFont
+        g2d.drawString(title, 40, g2d.getFontMetrics(titleFont).height)
+        g2d.font = toUseFont
+        var linePosition = 60
+        val fontSize = g2d.font.size
+        println("font height = $fontSize")
+        inputMap?.forEach {
+            val beautifiedValue = it.value.replace("|", " | ")
+            g2d.drawString(it.key, 10, linePosition)
+            g2d.drawString(beautifiedValue, 150, linePosition)
+            linePosition += fontSize + 5
+        }
+        g2d.dispose()
+        try {
+            val saveImage = File("cache" + File.separator + toSaveFileName)
+            ImageIO.write(img, "png", saveImage)
+            // println(saveImage.absolutePath)
+            return saveImage.absolutePath
+        } catch (ex: IOException) {
+            ex.printStackTrace()
+        }
+        return ""
     }
 }

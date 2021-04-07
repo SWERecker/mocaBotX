@@ -1,11 +1,14 @@
 package me.swe.main
 
+import net.mamoe.mirai.contact.Contact.Companion.sendImage
 import net.mamoe.mirai.contact.Contact.Companion.uploadImage
 import net.mamoe.mirai.contact.Group
 import net.mamoe.mirai.contact.getMember
 import net.mamoe.mirai.contact.nameCardOrNick
 import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.message.data.*
+import net.mamoe.mirai.utils.ExternalResource
+import net.mamoe.mirai.utils.ExternalResource.Companion.toExternalResource
 import net.mamoe.mirai.utils.MiraiLogger
 import java.io.File
 import java.lang.NumberFormatException
@@ -16,12 +19,6 @@ class MocaGroupMessageHandler(
     private val mocaInstance: Moca
 ) {
     private val logger = MiraiLogger.create("MocaGroupHandler")
-    suspend fun exampleOperation() {
-        val toSendMessage = buildMessageChain {
-            +PlainText("hello!")
-        }
-        subj.sendMessage(toSendMessage)
-    }
 
     suspend fun adminOperations(): Boolean {
         val messageContent = event.message.content
@@ -205,22 +202,22 @@ class MocaGroupMessageHandler(
         if (atTarget == event.bot.id) {
             println("At bot $atTarget")
             when {
-                messageContent.contains("统计图片数量") -> {
-                    subj.sendMessage(mocaInstance.buildGroupKeywordPicture())
+                messageContent.contains("关键词") -> {
+                    subj.sendImage(File(mocaInstance.buildGroupKeywordPicture(event.group.id)))
                     return true
                 }
 
-                messageContent.contains("图片数量统计") -> {
-                    subj.sendMessage(mocaInstance.buildAllPictureCountPicture())
+                (messageContent.contains("图片数量统计") || messageContent.contains("统计图片数量")) -> {
+                    subj.sendImage(File(mocaInstance.buildGroupPictureCount(event.group.id)))
                     return true
                 }
 
                 messageContent.contains("统计次数") -> {
-                    subj.sendMessage(mocaInstance.buildGroupCountPicture())
+                    subj.sendImage(File(mocaInstance.buildGroupCountPicture(event.group.id)))
                     return true
                 }
                 messageContent.contains("语音") -> {
-                    subj.sendMessage(mocaInstance.sendVoice())
+                    subj.sendMessage(sendVoice())
                     return true
                 }
             }
@@ -249,5 +246,23 @@ class MocaGroupMessageHandler(
             }
         }
         return false
+    }
+
+    private suspend fun sendVoice(): MessageChain{
+        val voiceFolder = File("resource" + File.separator + "voice")
+        val voiceFiles = voiceFolder.listFiles()
+        if(!voiceFiles.isNullOrEmpty()){
+            val voiceFile = File(voiceFiles.random().absolutePath).toExternalResource()
+            voiceFile.use {
+                val uploadVoice = subj.uploadVoice(voiceFile)
+                return buildMessageChain {
+                    +uploadVoice
+                }
+            }
+
+        }
+
+        return buildMessageChain {
+        }
     }
 }
