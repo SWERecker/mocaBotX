@@ -1,29 +1,27 @@
 package me.swe.main
 
 
+import net.mamoe.mirai.message.data.At
 import net.mamoe.mirai.message.data.MessageChain
+import net.mamoe.mirai.message.data.PlainText
 import net.mamoe.mirai.message.data.buildMessageChain
 import net.mamoe.mirai.utils.MiraiLogger
-import redis.clients.jedis.JedisPool
-import redis.clients.jedis.JedisPoolConfig
-import java.awt.*
-import java.awt.image.BufferedImage
 import java.io.File
 import java.io.InputStream
-import javax.imageio.ImageIO
-import java.io.IOException
 
+var picturePath: String = ""
+val indexFilePath = picturePath + "index.txt"
 
-class Moca(private val mocaDatabaseInstance: MocaDatabase) {
-    private val picturePath = "E:${File.separator}mirai${File.separator}pic${File.separator}"
-    private val indexFilePath = picturePath + "index.txt"
-    val supermanId = arrayOf(565379987L, 1400625889L)
-    private val redisPool = JedisPool(JedisPoolConfig())
+class Moca {
     private val mocaLogger = MiraiLogger.create("MocaLogger")
-    private val mapMocaCd = mutableMapOf<String, Int>()
+    private val mocaDB = MocaDatabase()
 
+    /**
+     * 初始化，从数据库中加载所有群组的关键词列表至内存.
+     */
     init {
-
+        mocaDB.loadAllGroupKeyword()
+        mocaDB.loadAllGroupConfig()
     }
 
     /**
@@ -51,6 +49,64 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
     }
 
     /**
+     * 从缓存中获取某群组的关键词列表.
+     *
+     * @param groupId 群号
+     *
+     * @return 群组的关键词列表 Map<String, String>
+     *
+     */
+    private fun getGroupKeyword(groupId: Long): Map<String, String> {
+        if (groupId !in mapGroupKeywords.keys) {
+            mocaDB.dbInitGroup(groupId)
+        }
+        return mapGroupKeywords[groupId] as Map<String, String>
+    }
+
+    /**
+     * 匹配关键词，同时返回是否含双倍关键词
+     *
+     * @param groupId 群号
+     * @param key 用户消息内容
+     *
+     * @return Pair(name, isDouble)
+     *
+     */
+    fun matchKey(groupId: Long, key: String): Pair<String, Boolean> {
+        var name = ""
+        var isDouble = false
+        val groupKeyword = getGroupKeyword(groupId)
+        for ((k, v) in groupKeyword) {
+            if (Regex(v).find(key.toLowerCase()) != null) {
+                name = k
+                break
+            }
+        }
+        if (key.startsWith("多")) {
+            isDouble = true
+        }
+        return Pair(name, isDouble)
+    }
+
+
+    /**
+     * 从数据库中获取相应群参数.
+     *
+     * @param groupId 群号
+     * @param arg 参数名称
+     *
+     * @return 参数值
+     *
+     */
+    fun getGroupConfig(groupId: Long, arg: String): Any? {
+        if (groupId !in mapGroupConfig.keys) {
+            mocaDB.dbInitGroup(groupId)
+        }
+        val groupConfig = mapGroupConfig[groupId] as Map<*, *>
+        return groupConfig[arg]
+    }
+
+    /**
      * 从Redis数据库中随机图片
      *
      * @param name 名称
@@ -68,29 +124,90 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
     }
 
     /**
-     * 从index.txt加载所有图片路径至Redis数据库
+     * 设置用户的lp
+     *
+     * @param userId 用户QQ号
+     * @param preProcessedContent 用户消息
+     *
      */
-    fun loadIndexFile(): Int {
-        redisPool.resource.use { r ->
-            r.select(3)
-            r.flushDB()
-            val inStream: InputStream = File(indexFilePath).inputStream()
-            inStream.bufferedReader().useLines { lines ->
-                lines.forEach {
-                    val line = it.split('|')
-                    val filePath = picturePath + line[0]
-                    val categories = line[1].split(' ')
-                    categories.forEach { category ->
-                        r.sadd(category, filePath)
-                    }
+    fun setUserLp(groupId: Long, userId: Long, preProcessedContent: String): MessageChain {
+        val toSetLpName = preProcessedContent.substringAfter("是")
+        val existUserLp = mocaDB.getUserConfig(userId, "lp") as String
+        if (toSetLpName.replace("？", "?")
+                .contains("?") ||
+            toSetLpName.contains("谁")
+        ) {
+            return if (existUserLp == "NOT_SET") {
+                buildMessageChain {
+                    +At(userId)
+                    +PlainText(" 您还没有设置lp呢，用【wlp是xxx】来设置一个吧~")
+                }
+
+            } else {
+                buildMessageChain {
+                    +At(userId)
+                    +PlainText(" 您设置的lp是：${existUserLp}")
                 }
             }
-            var peopleCount = 0
-            r.keys("*").forEach { _ ->
-                peopleCount++
-            }
-            return peopleCount
         }
+        if (existUserLp == toSetLpName) {
+            return buildMessageChain {
+                +At(userId)
+                +PlainText(" 您已经将${existUserLp}设置为您的lp了，请勿重复设置哦~")
+            }
+        }
+        val groupKeyword = getGroupKeyword(groupId)
+        return if (toSetLpName in groupKeyword.keys) {
+            mocaLogger.info("set $userId lp to $toSetLpName")
+            mocaDB.setConfig(userId, "USER", "lp", toSetLpName)
+            buildMessageChain {
+                +At(userId)
+                +PlainText(" 设置lp为：$toSetLpName")
+            }
+        } else {
+            val matchResult = matchLp(toSetLpName, groupKeyword)
+            if (matchResult.isNullOrEmpty()) {
+                buildMessageChain {
+                    +At(userId)
+                    +PlainText("\n没有在此群找到您要设置的lp哦~\n")
+                    +PlainText("请发送【@摩卡 关键词列表】查看可设置的关键词列表哦~")
+                }
+            } else {
+                var resultString = "\n未找到${toSetLpName}，您要设置的可能是：\n"
+                matchResult.forEach { (name, _) ->
+                    resultString += name + "\n"
+                }
+                // TO BE VERIFIED
+                resultString = resultString.trimEnd()
+                buildMessageChain {
+                    +At(userId)
+                    +PlainText(resultString)
+                }
+            }
+        }
+    }
+
+    /**
+     * 匹配lp
+     *
+     * @param lpName lp名称
+     * @param groupKeyword 群关键词列表
+     *
+     */
+    private fun matchLp(lpName: String, groupKeyword: Map<String, String>): MutableMap<String, Float> {
+        val matchString = StringSimilarity()
+        val matchResult = mutableMapOf<String, Float>()
+        groupKeyword.forEach { (name, keys) ->
+            val keyList = keys.split('|')
+            keyList.forEach {
+                val similarity = matchString.compareString(it, lpName)
+                if (similarity > 0.5) {
+                    println("$it, $lpName 相似度：$similarity")
+                    matchResult[name] = similarity
+                }
+            }
+        }
+        return matchResult
     }
 
     /**
@@ -100,13 +217,13 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
      *
      * @return 返回排序后的Map
      */
-    private fun getPictureCount(groupId: Long): Map<String, String>{
-        val groupKeyword = mocaDatabaseInstance.getGroupKeyword(groupId)
+    private fun getPictureCount(groupId: Long): Map<String, String> {
+        val groupKeyword = getGroupKeyword(groupId)
         val pictureCount = mutableMapOf<String, Int>()
         val mapSorter = MapSort()
         redisPool.resource.use { r ->
             r.select(3)
-            groupKeyword.forEach{ (name, _) ->
+            groupKeyword.forEach { (name, _) ->
                 pictureCount[name] = r.scard(name).toInt()
             }
         }
@@ -123,18 +240,15 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
      */
     fun setCd(id: Long, cdType: String, cdLength: Int = 0) {
         val currentTimestamp = (System.currentTimeMillis() / 1000).toInt()
-        mocaLogger.info(currentTimestamp.toString())
         val cdString = "${id}_${cdType}"
         if (cdLength != 0) {
             mapMocaCd[cdString] = currentTimestamp + cdLength
             mocaLogger.info("$cdString set to ${currentTimestamp + cdLength}")
         } else {
             val configCdLength = getGroupConfig(id, cdType).toString().toInt()
-            mocaLogger.info(configCdLength.toString())
             mapMocaCd[cdString] = currentTimestamp + configCdLength
-            mocaLogger.info("$cdString set to ${currentTimestamp + configCdLength}")
+            mocaLogger.info("$cdString +$configCdLength")
         }
-
     }
 
     /**
@@ -162,29 +276,14 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
      * @return 返回次数
      */
     fun getChangeLpTimes(userId: Long): Int {
-        val queryResult = mocaDatabaseInstance.getUserConfig(userId, "clp_time").toString()
+        val queryResult = mocaDB.getUserConfig(userId, "clp_time").toString()
         return try {
             queryResult.toInt()
         } catch (e: NumberFormatException) {
             0
+        } catch (e: Exception) {
+            0
         }
-    }
-
-    /**
-     * 从数据库中获取相应群参数.
-     *
-     * @param groupId 群号
-     * @param arg 参数名称
-     *
-     * @return 参数值
-     *
-     */
-    fun getGroupConfig(groupId: Long, arg: String): Any? {
-        if (groupId !in mocaDatabaseInstance.mapGroupConfig.keys) {
-            mocaDatabaseInstance.initGroup(groupId)
-        }
-        val groupConfig = mocaDatabaseInstance.mapGroupConfig[groupId] as Map<*, *>
-        return groupConfig[arg]
     }
 
     /**
@@ -195,119 +294,93 @@ class Moca(private val mocaDatabaseInstance: MocaDatabase) {
      * @return 未设置："NOT_SET"; 正常返回设置的lp名称
      */
     fun getUserLp(userId: Long): String {
-        val userLp = mocaDatabaseInstance.getUserConfig(userId, "lp") as String
+        val userLp = mocaDB.getUserConfig(userId, "lp") as String
         if (userLp == "NOT_FOUND") {
             return "NOT_SET"
         }
         return userLp
     }
 
-    fun setGroupFunction(id: Long, paraName: String, operation: Any): Boolean {
-        return mocaDatabaseInstance.setConfig(id, "GROUP", paraName, operation)
+    /**
+     * 设置群功能参数.
+     *
+     * @param groupId 群号.
+     * @param paraName 参数名称
+     * @param operation 具体操作
+     *
+     * @return 设置结果(t/f)
+     */
+    fun setGroupFunction(groupId: Long, paraName: String, operation: Any): Boolean {
+        return mocaDB.setConfig(groupId, "GROUP", paraName, operation)
     }
 
+    /**
+     * 创建keyword图片.
+     *
+     * @param groupId 群号
+     *
+     * @return 图像的绝对路径
+     */
     fun buildGroupKeywordPicture(groupId: Long): String {
         val imageMaker = MultiLineTextToImage
-        return imageMaker.buildImage("关键词列表",
+        return imageMaker.buildImage(
+            "关键词列表",
             "${groupId}_keyword.png",
-            mocaDatabaseInstance.getGroupKeyword(groupId)
+            getGroupKeyword(groupId)
         )
     }
 
+    /**
+     * 创建图像数量统计的图片.
+     *
+     * @param groupId 群号
+     *
+     * @return 图像的绝对路径
+     */
     fun buildGroupPictureCount(groupId: Long): String {
         val imageMaker = MultiLineTextToImage
-        return imageMaker.buildImage("图片数量统计",
+        return imageMaker.buildImage(
+            "图片数量统计",
             "${groupId}_pic_count.png",
             getPictureCount(groupId)
         )
     }
 
+    /**
+     * 创建群统计次数的图片.
+     *
+     * @param groupId 群号
+     *
+     * @return 图像的绝对路径
+     */
     fun buildGroupCountPicture(groupId: Long): String {
         val imageMaker = MultiLineTextToImage
-        return imageMaker.buildImage("次数统计",
+        return imageMaker.buildImage(
+            "次数统计",
             "${groupId}_count.png",
-            mocaDatabaseInstance.getGroupCount(groupId)
+            mocaDB.getGroupCount(groupId)
         )
     }
 
-}
-
-
-object MultiLineTextToImage {
-    @JvmStatic
-    fun buildImage(title: String, toSaveFileName: String, inputMap: Map<String, String>?): String {
-        var inputString = ""
-        inputMap?.forEach {
-            inputString += "${it.key}    ${it.value}\n"
-        }
-        var img = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
-        var g2d = img.createGraphics()
-        val toUseFont = Font("", Font.PLAIN, 16)
-        val titleFont = Font("", Font.PLAIN, 24)
-        g2d.dispose()
-        val inputStringArray = inputString.split("\n")
-        var stringLines = 0
-        var maxStringLength = 0
-
-        inputStringArray.forEach {
-            stringLines++
-            if (g2d.fontMetrics.getStringBounds(it, g2d).width.toInt() > maxStringLength) {
-                maxStringLength = g2d.fontMetrics.getStringBounds(it, g2d).width.toInt()
+    /**
+     * 获取SUPERMAN的QQ
+     *
+     * @return SUPERMAN的QQ号列表
+     */
+    fun getSupermanIds(): MutableList<Long> {
+        val supermanId = mutableListOf<Long>()
+        getBotConfig("SUPERMAN").split(',').also {
+            for (str in it) {
+                supermanId.add(str.toLong())
             }
         }
-        val imageHeight = stringLines * g2d.getFontMetrics(toUseFont).height + 50
-        val imageWidth = maxStringLength + 400
-        img = BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_ARGB)
-        g2d = img.createGraphics()
+        return supermanId
+    }
 
-        val bgImage: Image = ImageIO.read(File("resource" + File.separator + "bg.png"))
-        val bgImageHeight = bgImage.getHeight(null)
-        val bgImageWidth = bgImage.getWidth(null)
-        var bgImageDrawPosX = 0
-        var bgImageDrawPosY = 0
-        while (bgImageDrawPosY < imageHeight) {
-            while (bgImageDrawPosX < imageWidth) {
-                g2d.drawImage(bgImage, bgImageDrawPosX, bgImageDrawPosY, bgImageWidth, bgImageHeight, null)
-                // println("draw pos: X=$bgImageDrawPosX, Y=$bgImageDrawPosY")
-                bgImageDrawPosX += bgImageWidth
-            }
-            bgImageDrawPosX = 0
-            bgImageDrawPosY += bgImageHeight
-        }
-
-        g2d.setRenderingHint(
-            RenderingHints.KEY_ALPHA_INTERPOLATION,
-            RenderingHints.VALUE_ALPHA_INTERPOLATION_QUALITY
-        )
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-        g2d.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_QUALITY)
-        g2d.setRenderingHint(RenderingHints.KEY_DITHERING, RenderingHints.VALUE_DITHER_ENABLE)
-        g2d.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
-        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_DEFAULT)
-        g2d.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
-        g2d.color = Color.BLACK
-        g2d.font = titleFont
-        g2d.drawString(title, 40, g2d.getFontMetrics(titleFont).height)
-        g2d.font = toUseFont
-        var linePosition = 60
-        val fontSize = g2d.font.size
-        println("font height = $fontSize")
-        inputMap?.forEach {
-            val beautifiedValue = it.value.replace("|", " | ")
-            g2d.drawString(it.key, 10, linePosition)
-            g2d.drawString(beautifiedValue, 150, linePosition)
-            linePosition += fontSize + 5
-        }
-        g2d.dispose()
-        try {
-            val saveImage = File("cache" + File.separator + toSaveFileName)
-            ImageIO.write(img, "png", saveImage)
-            // println(saveImage.absolutePath)
-            return saveImage.absolutePath
-        } catch (ex: IOException) {
-            ex.printStackTrace()
-        }
-        return ""
+    /**
+     * 调用mocaDB的初始化群
+     */
+    fun initGroup(id: Long) {
+        mocaDB.dbInitGroup(id)
     }
 }
