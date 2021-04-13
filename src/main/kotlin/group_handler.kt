@@ -20,8 +20,8 @@ class MocaGroupMessageHandler(
     private val logger = MiraiLogger.create("MocaGroupHandler")
 
     /**
-    * 管理员操作
-    */
+     * 管理员操作
+     */
     suspend fun adminOperations(): Boolean {
         val messageContent = event.message.content
         when {
@@ -299,5 +299,89 @@ class MocaGroupMessageHandler(
         }
         return buildMessageChain {
         }
+    }
+
+    /**
+     * !指令处理器
+     */
+    suspend fun exclamationMarkProcessor(): Boolean {
+        val paraList = event.message.content
+            .replace("！", "!")
+            .trimStart('!')
+            .split(' ')
+        if (paraList.isNullOrEmpty()) {
+            return false
+        }
+        when (paraList[0]) {
+            "rd" -> {
+                // !rd k m n
+                // 掷k个m~n的色子，用空格分隔(0<k<11)
+                var resultString = ""
+                try {
+                    when (paraList.size) {
+                        1 -> {
+                            resultString += "roll 1 个 1 ~ 6 的骰子\n结果为："
+                            resultString += "${(1..6).random()}"
+                        }
+                        2 -> {
+                            val k = paraList[1].toInt()
+                            resultString += "roll $k 个 1 ~ 6 的骰子\n结果为："
+                            for (i in 1..k) {
+                                resultString += "${(1..6).random()} "
+                            }
+                            resultString.trim()
+                        }
+                        4 -> {
+                            val k = if (paraList[1].toInt() > 10) {
+                                10
+                            } else {
+                                paraList[1].toInt()
+                            }
+                            val m = paraList[2].toInt()
+                            val n = paraList[3].toInt()
+
+                            if (m > n) {
+                                subj.sendMessage("错误：参数有误\n使用例：【!rd 2 1 10】")
+                                return true
+                            }
+                            resultString += "roll $k 个 $m ~ $n 的骰子\n结果为："
+                            for (i in 1..k) {
+                                resultString += "${(m..n).random()} "
+                            }
+                            resultString.trim()
+                        }
+                        else -> {
+                            subj.sendMessage("错误：参数数量有误\n使用例：【!rd 2 1 10】")
+                            return true
+                        }
+                    }
+                    subj.sendMessage(resultString)
+                    return true
+                } catch (e: NumberFormatException) {
+                    subj.sendMessage("错误：参数数量有误\n使用例：【!rd 2 1 10】")
+                    return true
+                }
+            }
+            "r" -> {
+                if (paraList.size < 3) {
+                    subj.sendMessage("错误：参数数量不足\n使用例：【!r 吃饭 睡觉】")
+                } else {
+                    paraList.drop(1).shuffled()[0].also {
+                        subj.sendMessage("那当然是${it}啦~")
+                    }
+                }
+                return true
+            }
+            "c" -> {
+                if (paraList.size != 2) {
+                    subj.sendMessage("错误：参数数量有误\n使用例：【!c 小明的出货率】")
+                } else {
+                    paraList.drop(1)[0].also {
+                        subj.sendMessage("${it}为：${(0..100).random()}")
+                    }
+                }
+            }
+        }
+        return false
     }
 }

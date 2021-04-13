@@ -114,6 +114,17 @@ object WithConfiguration {
                 return@subscribeAlways
             }
 
+            if (messageContent
+                    .replace("！", "!")
+                    .startsWith("!")) {
+                // exclamation mark processor
+                groupMessageHandler.exclamationMarkProcessor().also {
+                    if (it) {
+                        return@subscribeAlways
+                    }
+                }
+            }
+
             val matchResult = moca.matchKey(group.id, messageContent)
             if (matchResult.first != "") {
                 groupMessageHandler.sendPicture(matchResult)
