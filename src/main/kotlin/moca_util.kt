@@ -1,5 +1,6 @@
 package me.swe.main
 
+import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.Comparator
 
@@ -66,4 +67,15 @@ class MapSort{
         }
         return sortedMap.toMap()
     }
+}
+
+/**
+ * 时间戳转换成字符窜
+ * @param pattern 时间样式 yyyy-MM-dd HH:mm:ss
+ * @return [String] 时间字符串
+ */
+fun Long.toDateStr(pattern: String = "yyyy-MM-dd HH:mm:ss"): String {
+    val date = Date(this)
+    val format = SimpleDateFormat(pattern)
+    return format.format(date)
 }

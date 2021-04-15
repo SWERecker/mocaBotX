@@ -33,13 +33,15 @@ object WithConfiguration {
         // bot.getFriend(565379987)?.sendMessage("你好")
         // bot.getGroup(907274961)?.sendMessage("Bot 上线")
 
-        bot.eventChannel.subscribeAlways<GroupMessageEvent> { event ->
-            val groupMessageHandler = MocaGroupMessageHandler(event, subject, moca)
+        bot.eventChannel.subscribeAlways<GroupMessageEvent> {
+            val groupMessageHandler = MocaGroupMessageHandler(this, subject, moca)
             val messageContent = this.message.content
+            val senderId = sender.id
+            val groupId = group.id
 
-            if (event.sender.id in moca.getSupermanIds()) {
+            if (moca.isSuperman(senderId)) {
                 groupMessageHandler.supermanOperations().also {
-                    if (it){
+                    if (it) {
                         return@subscribeAlways
                     }
                 }
@@ -48,43 +50,51 @@ object WithConfiguration {
             val atMessage: At? = this.message.findIsInstance<At>()
             if (atMessage != null) {
                 groupMessageHandler.atOperations().also {
-                    if (it){
+                    if (it) {
                         return@subscribeAlways
                     }
                 }
-             }
+            }
 
-            if (event.sender.permission.isOperator() || event.sender.id in moca.getSupermanIds()) {
+            if (sender.permission.isOperator() || moca.isSuperman(senderId)) {
                 groupMessageHandler.adminOperations().also {
-                    if (it){
+                    if (it) {
                         return@subscribeAlways
                     }
                 }
             }
 
-            when {
-                messageContent
-                    .replace("老婆", "lp")
-                    .contains("换lp次数") -> {
-                    groupMessageHandler.getSenderChangeLpTimes()
-                    return@subscribeAlways
+            if (moca.groupConfigEnabled(groupId, "pan")) {
+                groupMessageHandler.panOperations().also {
+                    if (it) {
+                        return@subscribeAlways
+                    }
                 }
             }
 
-            if (moca.isInCd(group.id, "replyCD")) {
-                mocaLogger.info("Group ${group.id} in cd")
+            if (messageContent
+                    .replace("老婆", "lp")
+                    .contains("换lp次数")
+            ) {
+                groupMessageHandler.getSenderChangeLpTimes()
+                return@subscribeAlways
+            }
+
+
+            if (moca.isInCd(groupId, "replyCD")) {
+                mocaLogger.info("Group $groupId in cd")
                 return@subscribeAlways
             }
 
             when {
                 messageContent.contains("使用说明") -> {
                     subject.sendMessage("使用说明：https://mocabot.cn/")
-                    moca.setCd(group.id, "replyCD")
+                    moca.setCd(groupId, "replyCD")
                     return@subscribeAlways
                 }
                 messageContent.contains("青年大学习") -> {
                     subject.sendMessage(moca.getBotConfig("QNDXX"))
-                    moca.setCd(group.id, "replyCD")
+                    moca.setCd(groupId, "replyCD")
                     return@subscribeAlways
                 }
             }
@@ -94,7 +104,7 @@ object WithConfiguration {
                 .replace("老婆", "lp")
                 .replace("事", "是")
             if (preProcessedContent.startsWith("wlp是")) {
-                val setLpResult = moca.setUserLp(event.group.id, event.sender.id, preProcessedContent)
+                val setLpResult = moca.setUserLp(groupId, senderId, preProcessedContent)
                 subject.sendMessage(setLpResult)
                 return@subscribeAlways
             }
@@ -106,17 +116,17 @@ object WithConfiguration {
                     .replace("老婆", "lp")
                     .contains("lp")
             ) {
-                val lpName = moca.getUserLp(event.sender.id)
-                val imageCount = messageContent.startsWith("多")
-                val imageParameter = Pair(lpName, imageCount)
+                val lpName = moca.getUserLp(senderId)
+                val doubleLp =
+                    messageContent.startsWith("多") && moca.groupConfigEnabled(groupId, "pan")
+                val imageParameter = Pair(lpName, doubleLp)
                 groupMessageHandler.sendPicture(imageParameter)
-                moca.setCd(group.id, "replyCD")
+                moca.setCd(groupId, "replyCD")
                 return@subscribeAlways
             }
 
-            if (messageContent
-                    .replace("！", "!")
-                    .startsWith("!")) {
+            if (messageContent.startsWith("!") || messageContent.startsWith("！")
+            ) {
                 // exclamation mark processor
                 groupMessageHandler.exclamationMarkProcessor().also {
                     if (it) {
@@ -125,51 +135,51 @@ object WithConfiguration {
                 }
             }
 
-            val matchResult = moca.matchKey(group.id, messageContent)
+            val matchResult = moca.matchKey(groupId, messageContent)
             if (matchResult.first != "") {
                 groupMessageHandler.sendPicture(matchResult)
-                moca.setCd(group.id, "replyCD")
+                moca.setCd(groupId, "replyCD")
                 return@subscribeAlways
             }
         }
 
 
-        bot.eventChannel.subscribeAlways<FriendMessageEvent> { event ->
-            if (event.sender.id == 565379987L) {
+        bot.eventChannel.subscribeAlways<FriendMessageEvent> {
+            if (moca.isSuperman(sender.id)) {
                 subject.sendMessage("Hello Master.")
             }
         }
 
-        bot.eventChannel.subscribeAlways<BotJoinGroupEvent> { event ->
-            mocaLogger.info("Joining new group. Init group ${event.group.id}")
-            moca.initGroup(event.group.id)
+        bot.eventChannel.subscribeAlways<BotJoinGroupEvent> {
+            mocaLogger.info("Joining new group. Init group ${group.id}")
+            moca.initGroup(group.id)
         }
 
-        bot.eventChannel.subscribeAlways<MemberLeaveEvent> { event ->
-            mocaLogger.info("Member leaving group ${event.group.id}.")
-            if (event.member.id in moca.getSupermanIds()) {
-                event.group.sendMessage("开发者${event.member.id}被移除，自动退出群组...")
-                mocaLogger.warning("Superman leaving group: ${event.group.id}.")
-                event.group.quit()
+        bot.eventChannel.subscribeAlways<MemberLeaveEvent> {
+            mocaLogger.info("Member leaving group ${group.id}.")
+            if (moca.isSuperman(member.id)) {
+                group.sendMessage("开发者${member.id}被移除，自动退出群组...")
+                mocaLogger.warning("Superman leaving group: ${group.id}.")
+                group.quit()
             }
         }
 
-        bot.eventChannel.subscribeAlways<MemberJoinEvent> { event ->
-            mocaLogger.info("Member join group ${event.group.id}.")
-            if (moca.getGroupConfig(event.group.id, "welcomeNewMemberJoin").toString().toInt() == 1) {
+        bot.eventChannel.subscribeAlways<MemberJoinEvent> {
+            mocaLogger.info("Member join group ${group.id}.")
+            if (moca.getGroupConfig(group.id, "welcomeNewMemberJoin").toString().toInt() == 1) {
                 val toSendMessage = buildMessageChain {
-                    +At(event.member)
-                    +PlainText(" 欢迎加入 ${event.group.name}！")
+                    +At(member)
+                    +PlainText(" 欢迎加入 ${group.name}！")
                 }
-                event.group.sendMessage(toSendMessage)
+                group.sendMessage(toSendMessage)
             }
         }
 
-        bot.eventChannel.subscribeAlways<BotInvitedJoinGroupRequestEvent> { event ->
-            mocaLogger.info("Moca invited to join group ${event.groupId}.")
-            if (event.invitorId in moca.getSupermanIds()) {
+        bot.eventChannel.subscribeAlways<BotInvitedJoinGroupRequestEvent> {
+            mocaLogger.info("Moca invited to join group ${groupId}.")
+            if (moca.isSuperman(invitorId)) {
                 mocaLogger.info("Superman invited to join group. Auto accept.")
-                event.accept()
+                accept()
             }
         }
     }

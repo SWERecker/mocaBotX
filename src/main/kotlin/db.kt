@@ -16,7 +16,7 @@ import java.lang.NumberFormatException
 
 val mapGroupKeywords = mutableMapOf<Long, Map<String, String>>()
 val mapGroupConfig = mutableMapOf<Long, Map<String, Any>>()
-val mapMocaCd = mutableMapOf<String, Int>()
+val mapMocaCd = mutableMapOf<String, Long>()
 
 
 val mongoClient: MongoClient = MongoClients.create()
@@ -93,7 +93,7 @@ class MocaDatabase {
             colUserConfig.updateOne(query, operationDocument)
         }
         if (saveResult.modifiedCount > 0) {
-            mocaDBLogger.info("Set $arg => $value")
+            mocaDBLogger.info("Set $setType $userId $arg => $value")
             if (setType == "GROUP") {
                 mocaDBLogger.info("Load $userId config to cache")
                 loadGroupConfig(userId.toString())

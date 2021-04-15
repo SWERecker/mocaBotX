@@ -107,6 +107,20 @@ class Moca {
     }
 
     /**
+     * 从数据库检查参数是否启用
+     *
+     * @param groupId 群号
+     * @param arg 参数名称
+     *
+     * @return 参数值
+     *
+     */
+    fun groupConfigEnabled(groupId: Long, arg: String): Boolean {
+        val groupConfig = getGroupConfig(groupId, arg) ?: return true
+        return groupConfig.toString().toInt() == 1
+    }
+
+    /**
      * 从Redis数据库中随机图片
      *
      * @param name 名称
@@ -177,7 +191,6 @@ class Moca {
                 matchResult.forEach { (name, _) ->
                     resultString += name + "\n"
                 }
-                // TO BE VERIFIED
                 resultString = resultString.trimEnd()
                 buildMessageChain {
                     +At(userId)
@@ -239,13 +252,13 @@ class Moca {
      *
      */
     fun setCd(id: Long, cdType: String, cdLength: Int = 0) {
-        val currentTimestamp = (System.currentTimeMillis() / 1000).toInt()
+        val currentTimestamp = System.currentTimeMillis() / 1000
         val cdString = "${id}_${cdType}"
         if (cdLength != 0) {
-            mapMocaCd[cdString] = currentTimestamp + cdLength
+            mapMocaCd[cdString] = currentTimestamp + cdLength.toLong()
             mocaLogger.info("$cdString set to ${currentTimestamp + cdLength}")
         } else {
-            val configCdLength = getGroupConfig(id, cdType).toString().toInt()
+            val configCdLength = getGroupConfig(id, cdType).toString().toLong()
             mapMocaCd[cdString] = currentTimestamp + configCdLength
             mocaLogger.info("$cdString +$configCdLength")
         }
@@ -260,7 +273,7 @@ class Moca {
      * @return 返回true/false（在/不在cd中）
      */
     fun isInCd(id: Long, cdType: String): Boolean {
-        val currentTimestamp = (System.currentTimeMillis() / 1000).toInt()
+        val currentTimestamp = System.currentTimeMillis() / 1000
         val cdString = "${id}_${cdType}"
         if (cdString !in mapMocaCd.keys) {
             return false
@@ -363,18 +376,18 @@ class Moca {
     }
 
     /**
-     * 获取SUPERMAN的QQ
+     * 检查某QQ是否为Superman
      *
-     * @return SUPERMAN的QQ号列表
+     * @return true/false(是/不是Superman)
      */
-    fun getSupermanIds(): MutableList<Long> {
+    fun isSuperman(userId: Long): Boolean {
         val supermanId = mutableListOf<Long>()
         getBotConfig("SUPERMAN").split(',').also {
             for (str in it) {
                 supermanId.add(str.toLong())
             }
         }
-        return supermanId
+        return userId in supermanId
     }
 
     /**
@@ -382,5 +395,109 @@ class Moca {
      */
     fun initGroup(id: Long) {
         mocaDB.dbInitGroup(id)
+    }
+
+    /**
+     * 获取用户面包数量
+     *
+     * @param userId 用户QQ号
+     *
+     * @return 面包数量(Int)
+     */
+    fun getUserPan(userId: Long): Int {
+        val userPan = mocaDB.getUserConfig(userId, "pan").also {
+            if (it == "NOT_FOUND") {
+                return 0
+            }
+        }
+        return userPan.toString().toInt()
+    }
+
+    /**
+     * 设置用户面包数量
+     *
+     * @param userId 用户QQ号
+     * @param panNumber 要设置的面包数量
+     *
+     * @return true/false(成功/失败)
+     */
+    private fun setUserPan(userId: Long, panNumber: Int): Boolean {
+        return mocaDB.setConfig(userId, "USER", "pan", panNumber)
+    }
+
+    /**
+     * 改变用户面包数量
+     *
+     * @param userId 用户QQ号
+     * @param delta 要设置的面包数量
+     *
+     * @return Pair(true/false(成功/失败), 改变后面包数量)
+     */
+    private fun panNumberModify(userId: Long, delta: Int): Pair<Boolean, Int> {
+        val userPan = getUserPan(userId)
+        return if (delta > 0) {
+            setUserPan(userId, userPan + delta)
+            Pair(true, getUserPan(userId))
+        } else {
+            if (-delta > userPan) {
+                mocaLogger.info("User $userId Pan not enough($userPan < ${-delta})")
+                Pair(false, userPan)
+            } else {
+                setUserPan(userId, userPan + delta)
+                Pair(true, getUserPan(userId))
+            }
+        }
+    }
+
+    /**
+     * 买面包
+     *
+     *
+     *
+     * @param userId 用户QQ号
+     *
+     * @return Pair(购买状态, 参数值)
+     *
+     * 购买状态备注，参数值
+     *
+     *  -1(在买面包cd中), 还需要等待的时间(s)
+     *
+     *  1~10(初次购买(此次买面包的数量)), 买完后拥有的面包数量
+     *
+     *  10~20(购买成功(10 + 此次买面包的数量)), 买完后拥有的面包数量
+     *
+     *
+     */
+    fun buyPan(userId: Long): Pair<Int, Long> {
+        val currentTimestamp = System.currentTimeMillis() / 1000
+        mocaDB.getUserConfig(userId, "last_buy_time").also {
+            return if (it == "NOT_FOUND") {
+                mocaDB.setConfig(userId, "USER", "last_buy_time", currentTimestamp)
+                val buyCount = (1..10).random()
+                val modifyResult = panNumberModify(userId, buyCount)
+                Pair(buyCount, modifyResult.second.toLong())
+            } else {
+                val userLastBuyTime = it.toString().toInt()
+                if (currentTimestamp - userLastBuyTime < 3600) {
+                    Pair(-1, 3600L + userLastBuyTime - currentTimestamp)
+                } else {
+                    mocaDB.setConfig(userId, "USER", "last_buy_time", currentTimestamp)
+                    val buyCount = (1..10).random()
+                    val modifyResult = panNumberModify(userId, buyCount)
+                    Pair(10 + buyCount, modifyResult.second.toLong())
+                }
+            }
+        }
+    }
+
+    /**
+     * 吃面包.
+     *
+     * @param userId 用户QQ号
+     *
+     * @return Pair(状态（成功/失败）, 剩余面包数量)
+     */
+    fun eatPan(userId: Long, panNumber: Int): Pair<Boolean, Int> {
+        return panNumberModify(userId, -panNumber)
     }
 }

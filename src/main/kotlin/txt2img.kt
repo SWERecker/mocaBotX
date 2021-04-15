@@ -71,7 +71,7 @@ object MultiLineTextToImage {
         g2d.font = toUseFont
         var linePosition = 60
         val fontSize = g2d.font.size
-        println("font height = $fontSize")
+        // println("font height = $fontSize")
         inputMap?.forEach {
             val beautifiedValue = it.value.replace("|", " | ")
             g2d.drawString(it.key, 10, linePosition)

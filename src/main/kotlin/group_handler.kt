@@ -18,12 +18,13 @@ class MocaGroupMessageHandler(
     private val moca: Moca,
 ) {
     private val logger = MiraiLogger.create("MocaGroupHandler")
+    private val messageContent = event.message.content
+    private val senderId = event.sender.id
 
     /**
      * 管理员操作
      */
     suspend fun adminOperations(): Boolean {
-        val messageContent = event.message.content
         when {
             messageContent.startsWith("设置图片cd") -> {
                 try {
@@ -171,7 +172,7 @@ class MocaGroupMessageHandler(
      * 超级管理员操作
      */
     suspend fun supermanOperations(): Boolean {
-        when (event.message.content) {
+        when (messageContent) {
             "RELOAD_REDIS" -> {
                 val reloadResult = loadIndexFile()
                 val resultMessage = "Reload redis database, current people count=$reloadResult"
@@ -187,7 +188,7 @@ class MocaGroupMessageHandler(
      * 获取换lp次数.
      */
     suspend fun getSenderChangeLpTimes(): Boolean {
-        val changeLpTimes = moca.getChangeLpTimes(event.sender.id)
+        val changeLpTimes = moca.getChangeLpTimes(senderId)
         subj.sendMessage(
             if (changeLpTimes == 0) {
                 buildMessageChain {
@@ -205,18 +206,33 @@ class MocaGroupMessageHandler(
 
     /**
      * 发送图片.
+     *
+     *
      */
     suspend fun sendPicture(imageParameter: Pair<String, Boolean>): Boolean {
-        val pictureCount = if (imageParameter.second) 2 else 1
+        var panResult = ""
+        var pictureCount = 1
+        if (imageParameter.second) {
+            moca.eatPan(senderId, 3).also {
+                if (it.first) {
+                    panResult = "摩卡吃掉了3个面包，你还剩${it.second}个面包哦~"
+                    pictureCount = 2
+                } else {
+                    panResult = "呜呜呜，你的面包不够吃了呢..."
+                }
+            }
+        }
         val pictureFiles = moca.randomPicture(imageParameter.first, pictureCount)
         val firstImage = subj.uploadImage(File(pictureFiles[0]))
         val toSendMessage = if (pictureCount == 1) {
             buildMessageChain {
+                +PlainText(panResult)
                 +firstImage
             }
         } else {
             val secondImage = subj.uploadImage(File(pictureFiles[1]))
             buildMessageChain {
+                +PlainText(panResult)
                 +firstImage
                 +secondImage
             }
@@ -231,7 +247,7 @@ class MocaGroupMessageHandler(
     suspend fun atOperations(): Boolean {
         val atTarget = event.message.findIsInstance<At>()?.target
         val atTargetName = atTarget?.let { subj.getMember(it)?.nameCardOrNick }
-        val messageContent = event.message.content
+        val messageContent = messageContent
         if (atTarget == event.bot.id) {
             println("At bot $atTarget")
             when {
@@ -305,8 +321,8 @@ class MocaGroupMessageHandler(
      * !指令处理器
      */
     suspend fun exclamationMarkProcessor(): Boolean {
-        val paraList = event.message.content
-            .replace("！", "!")
+        val paraList = messageContent
+            .replaceFirst("！", "!")
             .trimStart('!')
             .split(' ')
         if (paraList.isNullOrEmpty()) {
@@ -329,7 +345,6 @@ class MocaGroupMessageHandler(
                             for (i in 1..k) {
                                 resultString += "${(1..6).random()} "
                             }
-                            resultString.trim()
                         }
                         4 -> {
                             val k = if (paraList[1].toInt() > 10) {
@@ -348,13 +363,13 @@ class MocaGroupMessageHandler(
                             for (i in 1..k) {
                                 resultString += "${(m..n).random()} "
                             }
-                            resultString.trim()
                         }
                         else -> {
                             subj.sendMessage("错误：参数数量有误\n使用例：【!rd 2 1 10】")
                             return true
                         }
                     }
+                    resultString.trim()
                     subj.sendMessage(resultString)
                     return true
                 } catch (e: NumberFormatException) {
@@ -380,6 +395,76 @@ class MocaGroupMessageHandler(
                         subj.sendMessage("${it}为：${(0..100).random()}")
                     }
                 }
+            }
+        }
+        return false
+    }
+
+    suspend fun panOperations(): Boolean {
+        when (messageContent) {
+            "我的面包" -> {
+                subj.sendMessage(
+                    buildMessageChain {
+                        +At(senderId)
+                        +PlainText(" 您现在有${moca.getUserPan(senderId)}个面包呢~")
+                    }
+                )
+                return true
+            }
+            in arrayListOf("买面包", "来点面包") -> {
+                val buyResult = moca.buyPan(senderId)
+                when (buyResult.first) {
+                    -1 -> {
+                        var toWaitTimeString = ""
+                        toWaitTimeString += if (buyResult.second < 60) {
+                            "${buyResult.second}秒"
+                        } else {
+                            "${buyResult.second / 60}分钟"
+                        }
+                        subj.sendMessage(
+                            buildMessageChain {
+                                +At(senderId)
+                                +PlainText(" 还不能买面包呢~还要等${toWaitTimeString}呢~")
+                            }
+                        )
+                        return true
+                    }
+                    in (1..10) -> {
+                        subj.sendMessage(
+                            buildMessageChain {
+                                +At(senderId)
+                                +PlainText("\n初次成功购买了${buyResult.first}个面包！以后每小时可以购买一次哦~")
+                                +PlainText("\n有空的话，常来买哦~")
+                                +PlainText("\n你现在有${buyResult.second}个面包啦~")
+                            }
+                        )
+                        return true
+                    }
+                    in (11..20) -> {
+                        subj.sendMessage(
+                            buildMessageChain {
+                                +At(senderId)
+                                +PlainText(" 成功购买了${buyResult.first - 10}个面包，你现在有${buyResult.second}个面包啦~")
+                            }
+                        )
+                        return true
+                    }
+                }
+            }
+            in arrayListOf("吃面包", "恰面包") -> {
+                val eatResult = moca.eatPan(senderId, 1)
+                val resultText = if (eatResult.first) {
+                    "你吃掉了1个面包，还剩${eatResult.second}个面包了哦~"
+                } else {
+                    "呜呜呜，面包不够吃了呢..."
+                }
+                subj.sendMessage(
+                    buildMessageChain {
+                        +At(senderId)
+                        +PlainText(resultText)
+                    }
+                )
+                return true
             }
         }
         return false
