@@ -391,10 +391,17 @@ class Moca {
     }
 
     /**
-     * 调用mocaDB的初始化群
+     * 调用mocaDB.dbInitGroup
      */
     fun initGroup(id: Long) {
         mocaDB.dbInitGroup(id)
+    }
+
+    /**
+     * 调用mocaDB.updateGroupCount
+     */
+    fun updateCount(groupId: Long, name: String) {
+        mocaDB.updateGroupCount(groupId, name)
     }
 
     /**

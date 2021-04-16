@@ -222,6 +222,39 @@ class MocaDatabase {
     }
 
     /**
+     * 增加统计次数.
+     *
+     * @param groupId 群号
+     * @param name 要update的名称
+     * @param delta 增加的次数（默认为1）
+     *
+     * @return
+     *
+     */
+    fun updateGroupCount(groupId: Long, name: String, delta: Int = 1): Boolean {
+        val query = Document()
+            .append("group", groupId)
+        val queryResult = colGroupCount.find(query)
+            .projection(Projections.fields(Projections.excludeId(), Projections.include(name)))
+            .first()
+        println(queryResult)
+        if (queryResult == null){
+            mocaDBLogger.info("[$groupId] Initing empty count.")
+            val insertResult = colGroupCount.insertOne(query)
+            if (insertResult.wasAcknowledged()){
+                mocaDBLogger.info("[$groupId] Inited empty count.")
+            }
+        }
+            val operationDocument = Document("${'$'}inc", Document(name, delta))
+            val operationResult = colGroupCount.updateOne(query, operationDocument)
+            if (operationResult.modifiedCount > 0) {
+                mocaDBLogger.info("[$groupId] $name += 1")
+            return true
+        }
+        return false
+    }
+
+    /**
      * 从数据库中获取某群组的参数.
      *
      * @param groupIdString 群号 in String
@@ -230,7 +263,7 @@ class MocaDatabase {
      *
      */
     private fun loadGroupConfig(groupIdString: String) {
-        if (groupIdString == "config_template"){
+        if (groupIdString == "config_template") {
             mocaDBLogger.info("loadGroupConfig: Skip $groupIdString")
             return
         }
@@ -280,7 +313,7 @@ class MocaDatabase {
      *
      */
     private fun loadGroupKeyword(groupIdString: String) {
-        if (groupIdString == "key_template"){
+        if (groupIdString == "key_template") {
             mocaDBLogger.info("loadGroupKeyword: Skip $groupIdString")
             return
         }

@@ -20,6 +20,7 @@ class MocaGroupMessageHandler(
     private val logger = MiraiLogger.create("MocaGroupHandler")
     private val messageContent = event.message.content
     private val senderId = event.sender.id
+    private val groupId = event.group.id
 
     /**
      * 管理员操作
@@ -39,7 +40,7 @@ class MocaGroupMessageHandler(
                         })
                         return true
                     }
-                    moca.setGroupFunction(event.group.id, "replyCD", toSetParameter)
+                    moca.setGroupFunction(groupId, "replyCD", toSetParameter)
                     subj.sendMessage(buildMessageChain {
                         +PlainText("图片cd设置为：${toSetParameter}秒")
                     })
@@ -70,7 +71,7 @@ class MocaGroupMessageHandler(
                         })
                         return true
                     }
-                    moca.setGroupFunction(event.group.id, "repeatCD", toSetParameter)
+                    moca.setGroupFunction(groupId, "repeatCD", toSetParameter)
                     subj.sendMessage(buildMessageChain {
                         +PlainText("复读cd设置为：${toSetParameter}秒")
                     })
@@ -100,7 +101,7 @@ class MocaGroupMessageHandler(
                         })
                         return true
                     }
-                    moca.setGroupFunction(event.group.id, "repeatChance", toSetParameter)
+                    moca.setGroupFunction(groupId, "repeatChance", toSetParameter)
                     subj.sendMessage(buildMessageChain {
                         +PlainText("复读概率设置为：${toSetParameter}%")
                     })
@@ -121,9 +122,9 @@ class MocaGroupMessageHandler(
             messageContent.startsWith("查看当前参数") -> {
                 subj.sendMessage(
                     "当前参数：\n" +
-                            "图片cd=${moca.getGroupConfig(event.group.id, "replyCD")}秒\n" +
-                            "复读cd=${moca.getGroupConfig(event.group.id, "repeatCD")}秒\n" +
-                            "复读概率=${moca.getGroupConfig(event.group.id, "repeatChance")}%"
+                            "图片cd=${moca.getGroupConfig(groupId, "replyCD")}秒\n" +
+                            "复读cd=${moca.getGroupConfig(groupId, "repeatCD")}秒\n" +
+                            "复读概率=${moca.getGroupConfig(groupId, "repeatChance")}%"
                 )
                 return true
             }
@@ -134,33 +135,33 @@ class MocaGroupMessageHandler(
             val operation = if (operationString == "打开") 1 else 0
             when (messageContent.substring(2)) {
                 "面包功能" -> {
-                    moca.setGroupFunction(event.group.id, "pan", operation)
-                    subj.sendMessage("${event.group.id}已${operationString}面包功能")
+                    moca.setGroupFunction(groupId, "pan", operation)
+                    subj.sendMessage("${groupId}已${operationString}面包功能")
                     return true
                 }
                 "翻译功能" -> {
-                    moca.setGroupFunction(event.group.id, "trans", operation)
-                    subj.sendMessage("${event.group.id}已${operationString}翻译功能")
+                    moca.setGroupFunction(groupId, "trans", operation)
+                    subj.sendMessage("${groupId}已${operationString}翻译功能")
                     return true
                 }
                 "随机选歌" -> {
-                    moca.setGroupFunction(event.group.id, "random", operation)
-                    subj.sendMessage("${event.group.id}已${operationString}随机选歌功能")
+                    moca.setGroupFunction(groupId, "random", operation)
+                    subj.sendMessage("${groupId}已${operationString}随机选歌功能")
                     return true
                 }
                 "指令功能" -> {
-                    moca.setGroupFunction(event.group.id, "command", operation)
-                    subj.sendMessage("${event.group.id}已${operationString}【!】指令功能")
+                    moca.setGroupFunction(groupId, "command", operation)
+                    subj.sendMessage("${groupId}已${operationString}【!】指令功能")
                     return true
                 }
                 "实验功能" -> {
-                    moca.setGroupFunction(event.group.id, "exp", operation)
-                    subj.sendMessage("${event.group.id}已${operationString}实验功能")
+                    moca.setGroupFunction(groupId, "exp", operation)
+                    subj.sendMessage("${groupId}已${operationString}实验功能")
                     return true
                 }
                 "欢迎新人" -> {
-                    moca.setGroupFunction(event.group.id, "welcomeNewMemberJoin", operation)
-                    subj.sendMessage("${event.group.id}已${operationString}欢迎新人功能")
+                    moca.setGroupFunction(groupId, "welcomeNewMemberJoin", operation)
+                    subj.sendMessage("${groupId}已${operationString}欢迎新人功能")
                     return true
                 }
             }
@@ -237,6 +238,7 @@ class MocaGroupMessageHandler(
                 +secondImage
             }
         }
+        moca.updateCount(groupId, imageParameter.first)
         subj.sendMessage(toSendMessage)
         return true
     }
@@ -252,17 +254,17 @@ class MocaGroupMessageHandler(
             println("At bot $atTarget")
             when {
                 messageContent.contains("关键词") -> {
-                    subj.sendImage(File(moca.buildGroupKeywordPicture(event.group.id)))
+                    subj.sendImage(File(moca.buildGroupKeywordPicture(groupId)))
                     return true
                 }
 
                 (messageContent.contains("图片数量统计") || messageContent.contains("统计图片数量")) -> {
-                    subj.sendImage(File(moca.buildGroupPictureCount(event.group.id)))
+                    subj.sendImage(File(moca.buildGroupPictureCount(groupId)))
                     return true
                 }
 
                 messageContent.contains("统计次数") -> {
-                    subj.sendImage(File(moca.buildGroupCountPicture(event.group.id)))
+                    subj.sendImage(File(moca.buildGroupCountPicture(groupId)))
                     return true
                 }
                 messageContent.contains("语音") -> {
