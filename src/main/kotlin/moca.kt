@@ -507,4 +507,52 @@ class Moca {
     fun eatPan(userId: Long, panNumber: Int): Pair<Boolean, Int> {
         return panNumberModify(userId, -panNumber)
     }
+
+    /**
+     * 签到.
+     *
+     * @param userId 用户QQ号
+     *
+     * @return Pair(状态（成功/失败）, 剩余面包数量)
+     */
+    fun userSignIn(userId: Long): MutableList<Any> {
+        val tempLastSignInTime = mocaDB.getUserConfig(userId, "signin_time").toString()
+        var lastSignInTime = 0L
+        if (!tempLastSignInTime.isNotFound()) {
+            lastSignInTime = tempLastSignInTime.toLong()
+        }
+        if (lastSignInTime > getTimestampStartOfToday() && lastSignInTime < getTimestampEndOfToday()) {
+            return arrayListOf(-1, lastSignInTime, 0, 0)
+        }
+
+        val tempUserPan = mocaDB.getUserConfig(userId, "pan").toString()
+        var userOwnPan = 0
+        val signInTime = System.currentTimeMillis() / 1000
+        var sumSignInDay = 0
+        if (!tempUserPan.isNotFound()) {
+            userOwnPan = tempUserPan.toInt()
+        }
+        val tempSumDay = mocaDB.getUserConfig(userId, "sum_day").toString()
+        if (!tempSumDay.isNotFound()) {
+            sumSignInDay = tempSumDay.toInt()
+        }
+        userOwnPan += 5
+        println("lastSignInTime = $lastSignInTime")
+        println("userOwnPan += 5, = $userOwnPan")
+        println("sumSignInDay = $sumSignInDay")
+        return if (tempLastSignInTime.isNotFound()) {
+            sumSignInDay = 1
+            mocaDB.setConfig(userId, "USER", "signin_time", signInTime)
+            mocaDB.setConfig(userId, "USER", "sum_day", sumSignInDay)
+            val panResult = panNumberModify(userId, 5)
+            arrayListOf(1, signInTime, sumSignInDay, panResult.second)
+        } else {
+            sumSignInDay += 1
+            mocaDB.setConfig(userId, "USER", "signin_time", signInTime)
+            mocaDB.setConfig(userId, "USER", "sum_day", sumSignInDay)
+            val panResult = panNumberModify(userId, 5)
+            arrayListOf(0, signInTime, sumSignInDay, panResult.second)
+        }
+    }
 }
+

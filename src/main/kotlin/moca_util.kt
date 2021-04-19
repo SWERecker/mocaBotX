@@ -1,8 +1,16 @@
 package me.swe.main
 
 import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
 import java.util.*
 import kotlin.Comparator
+import java.time.ZonedDateTime
+
+
+
 
 /**
  * 字符串相似度计算
@@ -70,12 +78,35 @@ class MapSort{
 }
 
 /**
- * 时间戳转换成字符窜
+ * 时间戳转换成字符串
  * @param pattern 时间样式 yyyy-MM-dd HH:mm:ss
  * @return [String] 时间字符串
  */
 fun Long.toDateStr(pattern: String = "yyyy-MM-dd HH:mm:ss"): String {
-    val date = Date(this)
+    val date = Date(this * 1000)
     val format = SimpleDateFormat(pattern)
     return format.format(date)
+}
+
+/**
+ * 时间戳转换成字符窜
+ * @return [Long]返回今天开始的时间戳
+ */
+fun getTimestampStartOfToday(): Long {
+    val timeZone = ZoneId.systemDefault()
+    val dt = ZonedDateTime.now(timeZone)
+    return dt.toLocalDate().atStartOfDay(timeZone).toEpochSecond()
+}
+
+/**
+ * 时间戳转换成字符窜
+ * @return [Long]返回今天结束的时间戳
+ */
+fun getTimestampEndOfToday(): Long {
+    return getTimestampStartOfToday() + 86399L
+}
+
+
+fun String.isNotFound(): Boolean {
+    return this == "NOT_FOUND"
 }

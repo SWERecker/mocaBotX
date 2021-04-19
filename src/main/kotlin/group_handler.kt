@@ -468,6 +468,42 @@ class MocaGroupMessageHandler(
                 )
                 return true
             }
+            "签到" -> {
+                val signInResult = moca.userSignIn(senderId)
+                val signInTime = signInResult[1] as Long
+                subj.sendMessage(
+                    when(signInResult[0]){
+                        -1 -> {
+                                buildMessageChain {
+                                    +At(senderId)
+                                    +PlainText("\n你已经在今天的 ${signInTime.toDateStr("HH:mm:ss")} 签过到了哦~")
+                                    +PlainText("\n一天只能签到一次哦，明天再来吧~")
+                                }
+                        }
+                        0 -> {
+                            buildMessageChain {
+                                +At(senderId)
+                                +PlainText(" ${signInTime.toDateStr()}签到成功！")
+                                +PlainText("\n你已经累计签到了${signInResult[2]}天啦~")
+                                +PlainText("\n摩卡给你5个面包哦~你现在有${signInResult[3]}个面包啦~")
+                            }
+                        }
+                        1 -> {
+                            buildMessageChain {
+                                +At(senderId)
+                                +PlainText(" ${signInTime.toDateStr()} 签到成功~")
+                                +PlainText("\n初次签到，摩卡给你5个面包哦~")
+                                +PlainText("\n以后每天都可以签一次到哦~有空的话每天都来签到吧~")
+                                +PlainText("\n你现在有${signInResult[3]}个面包啦~")
+                            }
+                        }
+                        else -> {
+                            buildMessageChain {}
+                        }
+                    }
+                )
+                return true
+            }
         }
         return false
     }
