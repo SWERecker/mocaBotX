@@ -56,7 +56,7 @@ class Moca {
      * @return 群组的关键词列表 Map<String, String>
      *
      */
-    private fun getGroupKeyword(groupId: Long): Map<String, String> {
+    fun getGroupKeyword(groupId: Long): Map<String, String> {
         if (groupId !in mapGroupKeywords.keys) {
             mocaDB.dbInitGroup(groupId)
         }
@@ -172,7 +172,6 @@ class Moca {
         }
         val groupKeyword = getGroupKeyword(groupId)
         return if (toSetLpName in groupKeyword.keys) {
-            mocaLogger.info("set $userId lp to $toSetLpName")
             mocaDB.setConfig(userId, "USER", "lp", toSetLpName)
             buildMessageChain {
                 +At(userId)
@@ -513,7 +512,7 @@ class Moca {
      *
      * @param userId 用户QQ号
      *
-     * @return Pair(状态（成功/失败）, 剩余面包数量)
+     * @return arrayListOf(状态, 上次签到时间/签到时间, 合计签到天数, 用户面包数)
      */
     fun userSignIn(userId: Long): MutableList<Any> {
         val tempLastSignInTime = mocaDB.getUserConfig(userId, "signin_time").toString()
@@ -554,5 +553,50 @@ class Moca {
             arrayListOf(0, signInTime, sumSignInDay, panResult.second)
         }
     }
-}
 
+    /**
+     * 签到.
+     *
+     * @param userId 用户QQ号
+     * @param groupId 群号
+     *
+     * @return arrayListOf(状态, 抽签时间/上次抽签时间, 今日运势, 今日幸运数字, lpImagePath)
+     */
+    fun userDraw(userId: Long, groupId: Long): MutableList<Any> {
+        val tempDrawTime = mocaDB.getUserConfig(userId, "draw_time").toString()
+        val lastDrawTime: Long
+        if (!tempDrawTime.isNotFound()) {
+            lastDrawTime = tempDrawTime.toLong()
+            if (lastDrawTime > getTimestampStartOfToday() && lastDrawTime < getTimestampEndOfToday()) {
+                val todayDrawStatus = mocaDB.getUserConfig(userId, "today_draw_status").toString()
+                val todayLuckyNumber = mocaDB.getUserConfig(userId, "today_lucky_num").toString()
+                return arrayListOf(-1, lastDrawTime, todayDrawStatus, todayLuckyNumber, "")
+            }
+        }
+        val usePanResult = panNumberModify(userId, -2)
+        if (!usePanResult.first) {
+            return arrayListOf(-2, 0, "", "", "")
+        }
+        val drawTime = System.currentTimeMillis() / 1000
+        val luckyNumber = (1..10).random()
+        val luckString = arrayListOf(
+            "大吉~", "大吉~", "大吉~","大吉~",
+            "中吉", "中吉", "中吉", "中吉", "中吉", "中吉",
+            "中吉", "中吉", "中吉", "中吉", "中吉", "中吉",
+            "小吉", "小吉", "小吉", "小吉",
+            "吉", "吉", "吉", "吉","吉",
+            "末吉", "末吉", "末吉","末吉",
+            "凶..."
+        ).random()
+        val userLp = getUserLp(userId)
+        val pictureFile = if (userLp in getGroupKeyword(groupId).keys) {
+            randomPicture(userLp, 1)[0]
+        } else {
+            ""
+        }
+        mocaDB.setConfig(userId, "USER", "draw_time", drawTime)
+        mocaDB.setConfig(userId, "USER", "today_draw_status", luckString)
+        mocaDB.setConfig(userId, "USER", "today_lucky_num", luckyNumber)
+        return arrayListOf(0, drawTime, luckString, luckyNumber, pictureFile)
+    }
+}

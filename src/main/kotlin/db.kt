@@ -237,7 +237,6 @@ class MocaDatabase {
         val queryResult = colGroupCount.find(query)
             .projection(Projections.fields(Projections.excludeId(), Projections.include(name)))
             .first()
-        println(queryResult)
         if (queryResult == null){
             mocaDBLogger.info("[$groupId] Initing empty count.")
             val insertResult = colGroupCount.insertOne(query)

@@ -109,7 +109,6 @@ object WithConfiguration {
                 return@subscribeAlways
             }
 
-
             if (messageContent.contains("来点") &&
                 messageContent
                     .toLowerCase()
@@ -117,6 +116,10 @@ object WithConfiguration {
                     .contains("lp")
             ) {
                 val lpName = moca.getUserLp(senderId)
+                if (lpName !in moca.getGroupKeyword(groupId).keys) {
+                    subject.sendMessage("az，这个群没有找到nlp呢...")
+                    return@subscribeAlways
+                }
                 val doubleLp =
                     messageContent.startsWith("多") && moca.groupConfigEnabled(groupId, "pan")
                 val imageParameter = Pair(lpName, doubleLp)

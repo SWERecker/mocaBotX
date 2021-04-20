@@ -223,23 +223,16 @@ class MocaGroupMessageHandler(
                 }
             }
         }
+        val toSendMessage = mutableListOf<MessageContent>(
+            PlainText(panResult)
+        )
         val pictureFiles = moca.randomPicture(imageParameter.first, pictureCount)
-        val firstImage = subj.uploadImage(File(pictureFiles[0]))
-        val toSendMessage = if (pictureCount == 1) {
-            buildMessageChain {
-                +PlainText(panResult)
-                +firstImage
-            }
-        } else {
-            val secondImage = subj.uploadImage(File(pictureFiles[1]))
-            buildMessageChain {
-                +PlainText(panResult)
-                +firstImage
-                +secondImage
-            }
+        for (filePath in pictureFiles) {
+            toSendMessage += subj.uploadImage(File(filePath))
         }
+        logger.info(toSendMessage.toString())
         moca.updateCount(groupId, imageParameter.first)
-        subj.sendMessage(toSendMessage)
+        subj.sendMessage(toSendMessage.toMessageChain())
         return true
     }
 
@@ -472,13 +465,13 @@ class MocaGroupMessageHandler(
                 val signInResult = moca.userSignIn(senderId)
                 val signInTime = signInResult[1] as Long
                 subj.sendMessage(
-                    when(signInResult[0]){
+                    when (signInResult[0]) {
                         -1 -> {
-                                buildMessageChain {
-                                    +At(senderId)
-                                    +PlainText("\n你已经在今天的 ${signInTime.toDateStr("HH:mm:ss")} 签过到了哦~")
-                                    +PlainText("\n一天只能签到一次哦，明天再来吧~")
-                                }
+                            buildMessageChain {
+                                +At(senderId)
+                                +PlainText("\n你已经在今天的 ${signInTime.toDateStr("HH:mm:ss")} 签过到了哦~")
+                                +PlainText("\n一天只能签到一次哦，明天再来吧~")
+                            }
                         }
                         0 -> {
                             buildMessageChain {
@@ -496,6 +489,53 @@ class MocaGroupMessageHandler(
                                 +PlainText("\n以后每天都可以签一次到哦~有空的话每天都来签到吧~")
                                 +PlainText("\n你现在有${signInResult[3]}个面包啦~")
                             }
+                        }
+                        else -> {
+                            buildMessageChain {}
+                        }
+                    }
+                )
+                return true
+            }
+            "抽签" -> {
+                val drawResult = moca.userDraw(senderId, groupId)
+                subj.sendMessage(
+                    when (drawResult[0]) {
+                        -2 -> {
+                            buildMessageChain {
+                                +At(senderId)
+                                +PlainText(" 呜呜呜，面包不够了呢...抽不了签了...")
+                            }
+                        }
+                        -1 -> {
+                            val lastDrawTime = drawResult[1] as Long
+                            buildMessageChain {
+                                +At(senderId)
+                                +PlainText(
+                                    "\n你已经在今天的 ${lastDrawTime.toDateStr("HH:mm:ss")}抽过签啦~，" +
+                                            "\n一天只能抽一次签哦~明天再来吧~" +
+                                            "\n今日运势：${drawResult[2]}" +
+                                            "\n今日幸运数字：${drawResult[3]}"
+                                )
+                            }
+                        }
+                        0 -> {
+                            val drawTime = drawResult[1] as Long
+                            val lpImagePath = drawResult[4] as String
+
+                            val toSendMessage = mutableListOf(
+                                At(senderId),
+                                PlainText(
+                                    "\n${drawTime.toDateStr()} 抽签成功！" +
+                                            "\n今日运势：${drawResult[2]}" +
+                                            "\n今日幸运数字：${drawResult[3]}"
+                                )
+                            )
+                            if (lpImagePath != "") {
+                                toSendMessage += subj.uploadImage(File(lpImagePath))
+                            }
+                            logger.info(toSendMessage.toString())
+                            toSendMessage.toMessageChain()
                         }
                         else -> {
                             buildMessageChain {}
