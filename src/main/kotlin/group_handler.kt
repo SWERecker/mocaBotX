@@ -6,6 +6,7 @@ import net.mamoe.mirai.contact.Group
 import net.mamoe.mirai.contact.getMember
 import net.mamoe.mirai.contact.nameCardOrNick
 import net.mamoe.mirai.event.events.GroupMessageEvent
+import net.mamoe.mirai.message.code.MiraiCode.deserializeMiraiCode
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.ExternalResource.Companion.toExternalResource
 import net.mamoe.mirai.utils.MiraiLogger
@@ -244,7 +245,6 @@ class MocaGroupMessageHandler(
         val atTargetName = atTarget?.let { subj.getMember(it)?.nameCardOrNick }
         val messageContent = messageContent
         if (atTarget == event.bot.id) {
-            println("At bot $atTarget")
             when {
                 messageContent.contains("关键词") -> {
                     subj.sendImage(File(moca.buildGroupKeywordPicture(groupId)))
@@ -266,7 +266,6 @@ class MocaGroupMessageHandler(
                 }
             }
         } else {
-            println("At $atTarget")
             when {
                 messageContent
                     .replace("老婆", "lp")
@@ -547,4 +546,45 @@ class MocaGroupMessageHandler(
         }
         return false
     }
+
+    fun groupRepeatSaver(): Boolean {
+        // mutableMapOf<Long, MutableMap<Int, String>>()
+        if (mapGroupRepeater[groupId].isNullOrEmpty()) {
+            mapGroupRepeater[groupId] = mutableMapOf()
+            mapGroupRepeater[groupId]?.set(0, "0")
+            mapGroupRepeater[groupId]?.set(1, "")
+            mapGroupRepeater[groupId]?.set(2, "")
+            mapGroupRepeater[groupId]?.set(3, "")
+        }
+        when (mapGroupRepeater[groupId]?.get(0) ?: String) {
+            "0" -> {
+                mapGroupRepeater[groupId]?.set(0, "1")
+                mapGroupRepeater[groupId]?.set(1, event.message.serializeToMiraiCode())
+            }
+            "1" -> {
+                mapGroupRepeater[groupId]?.set(0, "2")
+                mapGroupRepeater[groupId]?.set(2, event.message.serializeToMiraiCode())
+            }
+            "2" -> {
+                mapGroupRepeater[groupId]?.set(1, mapGroupRepeater[groupId]?.get(2) as String)
+                mapGroupRepeater[groupId]?.set(2, event.message.serializeToMiraiCode())
+            }
+        }
+        if (mapGroupRepeater[groupId]?.get(1) == "" || mapGroupRepeater[groupId]?.get(2) == "") {
+            return false
+        }
+        if (mapGroupRepeater[groupId]?.get(1) == mapGroupRepeater[groupId]?.get(2) &&
+            mapGroupRepeater[groupId]?.get(2) != mapGroupRepeater[groupId]?.get(3)
+        ) {
+            return true
+        }
+        return false
+    }
+
+    suspend fun sendRepeatContent() {
+        val toSendMessage = mapGroupRepeater[groupId]?.get(1).toString().deserializeMiraiCode()
+        subj.sendMessage(toSendMessage)
+        mapGroupRepeater[groupId]?.set(3, event.message.serializeToMiraiCode())
+    }
+
 }

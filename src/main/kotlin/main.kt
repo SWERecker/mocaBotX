@@ -10,7 +10,7 @@ import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.BotConfiguration.MiraiProtocol.ANDROID_PAD
 import net.mamoe.mirai.utils.MiraiLogger
 
-fun main() {
+fun main(args: Array<String>) {
     WithConfiguration.main()
 }
 
@@ -81,71 +81,82 @@ object WithConfiguration {
             }
 
 
-            if (moca.isInCd(groupId, "replyCD")) {
-                mocaLogger.info("Group $groupId in cd")
-                return@subscribeAlways
-            }
-
-            when {
-                messageContent.contains("使用说明") -> {
-                    subject.sendMessage("使用说明：https://mocabot.cn/")
-                    moca.setCd(groupId, "replyCD")
-                    return@subscribeAlways
-                }
-                messageContent.contains("青年大学习") -> {
-                    subject.sendMessage(moca.getBotConfig("QNDXX"))
-                    moca.setCd(groupId, "replyCD")
-                    return@subscribeAlways
-                }
-            }
-
-            val preProcessedContent = messageContent
-                .replace("我", "w")
-                .replace("老婆", "lp")
-                .replace("事", "是")
-            if (preProcessedContent.startsWith("wlp是")) {
-                val setLpResult = moca.setUserLp(groupId, senderId, preProcessedContent)
-                subject.sendMessage(setLpResult)
-                return@subscribeAlways
-            }
-
-            if (messageContent.contains("来点") &&
-                messageContent
-                    .toLowerCase()
-                    .replace("老婆", "lp")
-                    .contains("lp")
-            ) {
-                val lpName = moca.getUserLp(senderId)
-                if (lpName !in moca.getGroupKeyword(groupId).keys) {
-                    subject.sendMessage("az，这个群没有找到nlp呢...")
-                    return@subscribeAlways
-                }
-                val doubleLp =
-                    messageContent.startsWith("多") && moca.groupConfigEnabled(groupId, "pan")
-                val imageParameter = Pair(lpName, doubleLp)
-                groupMessageHandler.sendPicture(imageParameter)
-                moca.setCd(groupId, "replyCD")
-                return@subscribeAlways
-            }
-
-            if (messageContent.startsWith("!") || messageContent.startsWith("！")
-            ) {
-                // exclamation mark processor
-                groupMessageHandler.exclamationMarkProcessor().also {
-                    if (it) {
+            if (!moca.isInCd(groupId, "replyCD")) {
+                when {
+                    messageContent.contains("使用说明") -> {
+                        subject.sendMessage("使用说明：https://mocabot.cn/")
+                        moca.setCd(groupId, "replyCD")
+                        return@subscribeAlways
+                    }
+                    messageContent.contains("青年大学习") -> {
+                        subject.sendMessage(moca.getBotConfig("QNDXX"))
+                        moca.setCd(groupId, "replyCD")
                         return@subscribeAlways
                     }
                 }
-            }
 
-            val matchResult = moca.matchKey(groupId, messageContent)
-            if (matchResult.first != "") {
-                groupMessageHandler.sendPicture(matchResult)
-                moca.setCd(groupId, "replyCD")
-                return@subscribeAlways
+                val preProcessedContent = messageContent
+                    .replace("我", "w")
+                    .replace("老婆", "lp")
+                    .replace("事", "是")
+                if (preProcessedContent.startsWith("wlp是")) {
+                    val setLpResult = moca.setUserLp(groupId, senderId, preProcessedContent)
+                    subject.sendMessage(setLpResult)
+                    return@subscribeAlways
+                }
+
+                if (messageContent.contains("来点") &&
+                    messageContent
+                        .toLowerCase()
+                        .replace("老婆", "lp")
+                        .contains("lp")
+                ) {
+                    val lpName = moca.getUserLp(senderId)
+                    if (lpName !in moca.getGroupKeyword(groupId).keys) {
+                        subject.sendMessage("az，这个群没有找到nlp呢...")
+                        return@subscribeAlways
+                    }
+                    val doubleLp =
+                        messageContent.startsWith("多") && moca.groupConfigEnabled(groupId, "pan")
+                    val imageParameter = Pair(lpName, doubleLp)
+                    groupMessageHandler.sendPicture(imageParameter)
+                    moca.setCd(groupId, "replyCD")
+                    return@subscribeAlways
+                }
+
+                if (messageContent.startsWith("!") || messageContent.startsWith("！")
+                ) {
+                    // exclamation mark processor
+                    groupMessageHandler.exclamationMarkProcessor().also {
+                        if (it) {
+                            return@subscribeAlways
+                        }
+                    }
+                }
+
+                val matchResult = moca.matchKey(groupId, messageContent)
+                if (matchResult.first != "") {
+                    groupMessageHandler.sendPicture(matchResult)
+                    moca.setCd(groupId, "replyCD")
+                    return@subscribeAlways
+                }
+            }
+            groupMessageHandler.groupRepeatSaver().also { toRepeat ->
+                if (toRepeat) {
+                    if (!moca.isInCd(groupId, "repeatCD")) {
+                        randomDo(
+                            moca.getGroupConfig(groupId, "repeatChance")
+                                .toString().toInt()
+                        ).also { random ->
+                            if (random) {
+                                groupMessageHandler.sendRepeatContent()
+                                moca.setCd(groupId, "repeatCD")
+                            }
+                        }
+                    }
+                }
             }
         }
-
 
         bot.eventChannel.subscribeAlways<FriendMessageEvent> {
             if (moca.isSuperman(sender.id)) {

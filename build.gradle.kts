@@ -2,10 +2,11 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     kotlin("jvm") version "1.4.10"
+    id("com.github.johnrengelman.shadow") version "6.1.0"
 }
 
 group = "me.swe"
-version = "1.0-SNAPSHOT"
+version = "1.0-RC1"
 
 repositories {
     mavenCentral()
@@ -20,12 +21,21 @@ dependencies {
     //runtimeOnly("net.mamoe:mirai-login-solver-selenium:1.0-dev-16")
     api("org.mongodb", "mongodb-driver-sync", "4.2.2")
     api("redis.clients", "jedis", "3.5.2")
+    api("org.slf4j", "slf4j-log4j12", "1.7.30")
+
 }
 
 tasks.test {
     useJUnit()
 }
 
-tasks.withType<KotlinCompile>() {
+tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "11"
+}
+
+
+tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
+    manifest {
+        attributes["Main-Class"] = "me.swe.main.MainKt"
+    }
 }

@@ -106,7 +106,23 @@ fun getTimestampEndOfToday(): Long {
     return getTimestampStartOfToday() + 86399L
 }
 
-
+/**
+ * String.isNotFound()
+ *
+ * @return String == "NOT_FOUND"
+ */
 fun String.isNotFound(): Boolean {
     return this == "NOT_FOUND"
+}
+
+/**
+ * 随机，事件是否发生
+ *
+ * @param possibility 概率
+ *
+ * @return true/false
+ */
+fun randomDo(possibility: Int): Boolean {
+    val seed = (0..99).random()
+    return seed < possibility
 }

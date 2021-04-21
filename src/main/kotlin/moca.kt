@@ -536,9 +536,9 @@ class Moca {
             sumSignInDay = tempSumDay.toInt()
         }
         userOwnPan += 5
-        println("lastSignInTime = $lastSignInTime")
-        println("userOwnPan += 5, = $userOwnPan")
-        println("sumSignInDay = $sumSignInDay")
+        // println("lastSignInTime = $lastSignInTime")
+        // println("userOwnPan += 5, = $userOwnPan")
+        // println("sumSignInDay = $sumSignInDay")
         return if (tempLastSignInTime.isNotFound()) {
             sumSignInDay = 1
             mocaDB.setConfig(userId, "USER", "signin_time", signInTime)
