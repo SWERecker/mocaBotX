@@ -147,9 +147,8 @@ class Moca {
      */
     fun setUserLp(groupId: Long, userId: Long, preProcessedContent: String): MessageChain {
         val toSetLpName = preProcessedContent.substringAfter("是")
-        val existUserLp = mocaDB.getUserConfig(userId, "lp") as String
-        if (toSetLpName.replace("？", "?")
-                .contains("?") ||
+        val existUserLp = getUserLp(userId)
+        if (toSetLpName.replace("？", "?").contains("?") ||
             toSetLpName.contains("谁")
         ) {
             return if (existUserLp == "NOT_SET") {

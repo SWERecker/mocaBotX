@@ -155,7 +155,7 @@ object WithConfiguration {
                 ) {
                     val lpName = moca.getUserLp(senderId)
                     if (lpName !in moca.getGroupKeyword(groupId).keys) {
-                        subject.sendMessage("az，这个群没有找到nlp呢...")
+                        subject.sendMessage("az，您还没有设置lp或者这个群没有找到nlp呢...")
                         return@subscribeAlways
                     }
                     val doubleLp =
