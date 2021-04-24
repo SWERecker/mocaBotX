@@ -21,8 +21,10 @@ object MultiLineTextToImage {
         }
         var img = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
         var g2d = img.createGraphics()
-        val toUseFont = Font("", Font.PLAIN, 16)
-        val titleFont = Font("", Font.PLAIN, 24)
+        val toUseFont = Font.createFont(Font.TRUETYPE_FONT, File("resource" + File.separator + "PingFang.ttf"))
+        val fontSized = toUseFont.deriveFont(16f)
+        val titleFont = Font.createFont(Font.TRUETYPE_FONT, File("resource" + File.separator + "PingFang.ttf"))
+        val titleSized  = titleFont.deriveFont(24f)
         g2d.dispose()
         val inputStringArray = inputString.split("\n")
         var stringLines = 0
@@ -34,7 +36,7 @@ object MultiLineTextToImage {
                 maxStringLength = g2d.fontMetrics.getStringBounds(it, g2d).width.toInt()
             }
         }
-        val imageHeight = stringLines * g2d.getFontMetrics(toUseFont).height + 50
+        val imageHeight = stringLines * g2d.getFontMetrics(fontSized).height + 50
         val imageWidth = maxStringLength + 400
         img = BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_ARGB)
         g2d = img.createGraphics()
@@ -66,9 +68,9 @@ object MultiLineTextToImage {
         g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_DEFAULT)
         g2d.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
         g2d.color = Color.BLACK
-        g2d.font = titleFont
-        g2d.drawString(title, 40, g2d.getFontMetrics(titleFont).height)
-        g2d.font = toUseFont
+        g2d.font = titleSized
+        g2d.drawString(title, 40, g2d.getFontMetrics(titleSized).height)
+        g2d.font = fontSized
         var linePosition = 60
         val fontSize = g2d.font.size
         // println("font height = $fontSize")
