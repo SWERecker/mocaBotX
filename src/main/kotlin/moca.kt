@@ -76,9 +76,11 @@ class Moca {
         var isDouble = false
         val groupKeyword = getGroupKeyword(groupId)
         for ((k, v) in groupKeyword) {
-            if (Regex(v).find(key.toLowerCase()) != null) {
-                name = k
-                break
+            if (v != "") {
+                if (Regex(v).find(key.toLowerCase()) != null) {
+                    name = k
+                    break
+                }
             }
         }
         if (key.startsWith("多")) {

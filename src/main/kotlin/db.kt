@@ -5,6 +5,7 @@ import com.mongodb.client.MongoClients
 import com.mongodb.client.MongoCollection
 import com.mongodb.client.MongoDatabase
 import com.mongodb.client.model.Projections
+import com.mongodb.client.model.UpdateOptions
 import net.mamoe.mirai.utils.MiraiLogger
 import org.bson.Document
 import redis.clients.jedis.JedisPool
@@ -87,12 +88,13 @@ class MocaDatabase {
                 .append("qq", userId)
         }
         val operationDocument = Document("${'$'}set", Document(arg, value))
+        val enableUpsert = UpdateOptions().upsert(true)
         val saveResult = if (setType == "GROUP") {
-            colGroupConfig.updateOne(query, operationDocument)
+            colGroupConfig.updateOne(query, operationDocument, enableUpsert)
         } else {
-            colUserConfig.updateOne(query, operationDocument)
+            colUserConfig.updateOne(query, operationDocument, enableUpsert)
         }
-        if (saveResult.modifiedCount > 0) {
+        if (saveResult.upsertedId != null || saveResult.modifiedCount > 0) {
             mocaDBLogger.info("Set $setType $userId $arg => $value")
             if (setType == "GROUP") {
                 mocaDBLogger.info("Load $userId config to cache")

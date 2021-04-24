@@ -511,7 +511,7 @@ class MocaGroupMessageHandler(
                         0 -> {
                             buildMessageChain {
                                 +At(senderId)
-                                +PlainText(" ${signInTime.toDateStr()}签到成功！")
+                                +PlainText("\n${signInTime.toDateStr()}签到成功！")
                                 +PlainText("\n你已经累计签到了${signInResult[2]}天啦~")
                                 +PlainText("\n摩卡给你5个面包哦~你现在有${signInResult[3]}个面包啦~")
                             }
@@ -519,7 +519,7 @@ class MocaGroupMessageHandler(
                         1 -> {
                             buildMessageChain {
                                 +At(senderId)
-                                +PlainText(" ${signInTime.toDateStr()} 签到成功~")
+                                +PlainText("\n${signInTime.toDateStr()} 签到成功~")
                                 +PlainText("\n初次签到，摩卡给你5个面包哦~")
                                 +PlainText("\n以后每天都可以签一次到哦~有空的话每天都来签到吧~")
                                 +PlainText("\n你现在有${signInResult[3]}个面包啦~")

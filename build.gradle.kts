@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "me.swe"
-version = "1.0-RC1"
+version = "1.0.1"
 
 repositories {
     mavenCentral()
