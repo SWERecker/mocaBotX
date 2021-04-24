@@ -210,6 +210,7 @@ object WithConfiguration {
         bot.eventChannel.subscribeAlways<BotJoinGroupEvent> {
             mocaLogger.info("Joining new group. Init group ${group.id}")
             moca.initGroup(group.id)
+            group.sendMessage("大家好，我是moca\n使用说明：http://mocabot.cn/\n请仔细查看使用说明并按照格式使用哦！")
         }
 
         bot.eventChannel.subscribeAlways<MemberLeaveEvent> {
