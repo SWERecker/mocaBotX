@@ -179,7 +179,7 @@ class MocaDatabase {
      * 将关键词列表保存至缓存和数据库.
      *
      * @param groupId 群号
-     * @param newGroupKeyword: 要存储的groupKeyword
+     * @param newGroupKeyword 要存储的groupKeyword
      *
      * @return
      *
@@ -348,6 +348,7 @@ fun loadIndexFile(): Int {
     redisPool.resource.use { r ->
         r.select(3)
         r.flushDB()
+        val indexFilePath = picturePath + "index.txt"
         val inStream: InputStream = File(indexFilePath).inputStream()
         inStream.bufferedReader().useLines { lines ->
             lines.forEach {

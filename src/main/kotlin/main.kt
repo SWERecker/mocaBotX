@@ -4,6 +4,7 @@ package me.swe.main
 import kotlinx.coroutines.runBlocking
 import net.mamoe.mirai.BotFactory
 import net.mamoe.mirai.alsoLogin
+import net.mamoe.mirai.contact.Contact.Companion.sendImage
 import net.mamoe.mirai.contact.isOperator
 import net.mamoe.mirai.event.events.*
 import net.mamoe.mirai.message.data.*
@@ -80,6 +81,18 @@ object WithConfiguration {
                 return@subscribeAlways
             }
 
+            if (messageContent.startsWith("提交图片")) {
+                val category = message.filterIsInstance<PlainText>()
+                    .firstOrNull()
+                    .toString()
+                    .substring(4)
+                    .replace("\n", "")
+                if (!message.contains(Image)) {
+                    subject.sendMessage("错误，你至少需要包含一张图片")
+                    return@subscribeAlways
+                }
+                subject.sendMessage(moca.submitPictures(groupId, message.filterIsInstance<Image>(), category))
+            }
 
             if (!moca.isInCd(groupId, "replyCD")) {
                 when {
@@ -94,6 +107,35 @@ object WithConfiguration {
                         return@subscribeAlways
                     }
                 }
+
+                messageContent
+                    .replace("摩卡", "moca")
+                    .replace("爪巴", "爬")
+                    .replace("老婆", "lp")
+                    .toLowerCase()
+                    .also {
+                        if (moca.isInCd(groupId, "keaiPaCD")) {
+                            return@subscribeAlways
+                        }
+                        if (it.contains("moca") && it.contains("爬")) {
+                            if (randomDo(50)) {
+                                mocaPaPath.listFiles()?.random()?.let { file -> subject.sendImage(file) }
+                                moca.setCd(groupId, "keaiPaCD")
+                            }
+
+                            return@subscribeAlways
+                        }
+                        if ((it.contains("moca") && it.contains("可爱")) ||
+                            (it.contains("moca") && it.contains("lp"))
+                        ) {
+                            if (randomDo(50)) {
+                                mocaKeaiPath.listFiles()?.random()?.let { file -> subject.sendImage(file) }
+                                moca.setCd(groupId, "keaiPaCD")
+                            }
+                            return@subscribeAlways
+                        }
+                    }
+
 
                 val preProcessedContent = messageContent
                     .replace("我", "w")
@@ -141,6 +183,7 @@ object WithConfiguration {
                     return@subscribeAlways
                 }
             }
+
             groupMessageHandler.groupRepeatSaver().also { toRepeat ->
                 if (toRepeat) {
                     if (!moca.isInCd(groupId, "repeatCD")) {

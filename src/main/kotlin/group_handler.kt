@@ -129,6 +129,24 @@ class MocaGroupMessageHandler(
                 )
                 return true
             }
+
+            (messageContent.startsWith("添加关键词") || messageContent.startsWith("删除关键词")) -> {
+                val paras = messageContent
+                    .substring(5)
+                    .replace(" ", "")
+                    .replace("，", ",")
+                    .split(',')
+                if (paras.size != 2) {
+                    subj.sendMessage("错误，参数数量有误")
+                    return true
+                }
+                if (messageContent.substring(0, 2) == "添加") {
+                    subj.sendMessage(moca.keywordEdit(groupId, paras, "ADD"))
+                } else {
+                    subj.sendMessage(moca.keywordEdit(groupId, paras, "REMOVE"))
+                }
+                return true
+            }
         }
 
         if (messageContent.startsWith("打开") || messageContent.startsWith("关闭")) {
@@ -261,10 +279,29 @@ class MocaGroupMessageHandler(
                     return true
                 }
                 messageContent.contains("语音") -> {
-                    subj.sendMessage(sendVoice())
+                    sendVoice()
                     return true
                 }
             }
+            messageContent
+                .replace("摩卡", "moca")
+                .replace("爪巴", "爬")
+                .replace("老婆", "lp")
+                .toLowerCase()
+                .also {
+                    if (it.contains("爬")) {
+                        if (randomDo(50)) {
+                            mocaPaPath.listFiles()?.random()?.let { file -> subj.sendImage(file) }
+                        }
+                        return true
+                    }
+                    if (it.contains("可爱") || it.contains("lp")) {
+                        if (randomDo(50)) {
+                            mocaKeaiPath.listFiles()?.random()?.let { file -> subj.sendImage(file) }
+                        }
+                        return true
+                    }
+                }
         } else {
             when {
                 messageContent
@@ -294,21 +331,20 @@ class MocaGroupMessageHandler(
     /**
      * 发送语音
      */
-    private suspend fun sendVoice(): MessageChain {
+    private suspend fun sendVoice() {
         val voiceFolder = File("resource" + File.separator + "voice")
         val voiceFiles = voiceFolder.listFiles()
         if (!voiceFiles.isNullOrEmpty()) {
             val voiceFile = File(voiceFiles.random().absolutePath).toExternalResource()
             voiceFile.use {
-                val uploadVoice = subj.uploadVoice(voiceFile)
-                return buildMessageChain {
-                    +uploadVoice
-                }
+                subj.uploadVoice(voiceFile).sendTo(event.group)
+//                return buildMessageChain {
+//                    +uploadVoice
+//                }
             }
-
         }
-        return buildMessageChain {
-        }
+//        return buildMessageChain {
+//        }
     }
 
     /**

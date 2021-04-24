@@ -1,16 +1,15 @@
 package me.swe.main
 
 
-import net.mamoe.mirai.message.data.At
-import net.mamoe.mirai.message.data.MessageChain
-import net.mamoe.mirai.message.data.PlainText
-import net.mamoe.mirai.message.data.buildMessageChain
+import net.mamoe.mirai.message.data.*
+import net.mamoe.mirai.message.data.Image.Key.queryUrl
 import net.mamoe.mirai.utils.MiraiLogger
 import java.io.File
 import java.io.InputStream
 
 var picturePath: String = ""
-val indexFilePath = picturePath + "index.txt"
+val mocaPaPath = File("resource" + File.separator + "pa" + File.separator)
+val mocaKeaiPath = File("resource" + File.separator + "keai" + File.separator)
 
 class Moca {
     private val mocaLogger = MiraiLogger.create("MocaLogger")
@@ -580,12 +579,12 @@ class Moca {
         val drawTime = System.currentTimeMillis() / 1000
         val luckyNumber = (1..10).random()
         val luckString = arrayListOf(
-            "大吉~", "大吉~", "大吉~","大吉~",
+            "大吉~~", "大吉~", "大吉~~", "大吉~",
             "中吉", "中吉", "中吉", "中吉", "中吉", "中吉",
             "中吉", "中吉", "中吉", "中吉", "中吉", "中吉",
             "小吉", "小吉", "小吉", "小吉",
-            "吉", "吉", "吉", "吉","吉",
-            "末吉", "末吉", "末吉","末吉",
+            "吉", "吉", "吉", "吉", "吉",
+            "末吉", "末吉", "末吉", "末吉",
             "凶..."
         ).random()
         val userLp = getUserLp(userId)
@@ -598,5 +597,70 @@ class Moca {
         mocaDB.setConfig(userId, "USER", "today_draw_status", luckString)
         mocaDB.setConfig(userId, "USER", "today_lucky_num", luckyNumber)
         return arrayListOf(0, drawTime, luckString, luckyNumber, pictureFile)
+    }
+
+    fun keywordEdit(groupId: Long, paras: List<String>, operation: String = "ADD"): MessageChain {
+        val groupKeyword = getGroupKeyword(groupId).toMutableMap()
+        val (name, key) = paras
+        if (name !in groupKeyword.keys) {
+            return PlainText("错误：未找到“${name}”，请检查是名称否正确").toMessageChain()
+        }
+        val existKeys = groupKeyword[name]
+        val keysList = groupKeyword[name]?.split("|")?.toMutableList()
+        if (keysList != null) {
+            when (operation) {
+                "ADD" -> {
+                    return if (existKeys?.let { Regex(it).find(key.toLowerCase()) } != null) {
+                        PlainText("错误：“${name}”中已存在能够识别“${key}”的关键词").toMessageChain()
+                    } else {
+                        keysList.add(key)
+                        groupKeyword[name] = keysList.joinToString("|")
+                        mocaDB.saveGroupKeyword(groupId, groupKeyword.toMap())
+                        PlainText("成功向“${name}”中添加了关键词“${key}”").toMessageChain()
+                    }
+                }
+                "REMOVE" -> {
+                    keysList.remove(key).also {
+                        return if (it) {
+                            groupKeyword[name] = keysList.joinToString("|")
+                            mocaDB.saveGroupKeyword(groupId, groupKeyword.toMap())
+                            PlainText("成功删除了关键词“${key}”").toMessageChain()
+                        } else {
+                            PlainText("${name}中未找到关键词“${key}”").toMessageChain()
+                        }
+                    }
+                }
+            }
+        }
+        return PlainText("null").toMessageChain()
+    }
+
+    suspend fun submitPictures(groupId: Long, images: List<Image>, category: String): String {
+        var successImageCount = 0
+        var exceptionImageCount = 0
+        var exceptionMessage = ""
+        val imageCategory = if (category == "") {
+            "${groupId}/UNDEFINED"
+        } else {
+            "${groupId}/${category}"
+        }
+        images.forEach { image ->
+            val imageId = image.imageId
+            val imageUrl = image.queryUrl()
+            val fileName = imageId.substring(imageId.indexOf("{") + 1, imageId.indexOf("}") - 1)
+            downloadImage(imageUrl, imageCategory, fileName).also {
+                if (it == "SUCCESS") {
+                    successImageCount++
+                } else {
+                    exceptionImageCount++
+                    exceptionMessage += it + "\n"
+                }
+            }
+        }
+        var result = "提交图片：成功${successImageCount}张"
+        if (exceptionImageCount != 0) {
+            result += "，失败${exceptionImageCount}张\n发生错误：\n" + exceptionMessage
+        }
+        return result
     }
 }

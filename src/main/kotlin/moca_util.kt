@@ -1,15 +1,13 @@
 package me.swe.main
 
+import java.io.*
+import java.net.URL
 import java.text.SimpleDateFormat
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.LocalTime
 import java.time.ZoneId
 import java.util.*
 import kotlin.Comparator
 import java.time.ZonedDateTime
-
-
+import java.net.URLConnection
 
 
 /**
@@ -58,7 +56,7 @@ class StringSimilarity {
 /**
  * 根据Map的Value进行一个序的排
  */
-class MapSort{
+class MapSort {
     fun mapSortByValue(toSortMap: Map<String, Int>): Map<String, String> {
 
         //自定义比较器
@@ -125,4 +123,44 @@ fun String.isNotFound(): Boolean {
 fun randomDo(possibility: Int): Boolean {
     val seed = (0..99).random()
     return seed < possibility
+}
+
+/**
+ * 下载图片
+ *
+ * @param url 下载链接
+ * @param fileName 文件名
+ *
+ * @return 下载状态/错误内容
+ */
+fun downloadImage(url: String, category: String, fileName: String): String {
+    val urlObject = URL(url)
+    var byteSum = 0
+    var byteRead: Int
+    try {
+        val conn: URLConnection = urlObject.openConnection()
+        val inStream: InputStream = conn.getInputStream()
+        val fileType = conn.contentType.split("/")[1]
+        val downloadPath = "cache" + File.separator + "upload" + File.separator + category + File.separator
+        if (!File(downloadPath).exists()) {
+            File(downloadPath).mkdirs()
+        }
+        val fs = FileOutputStream(downloadPath + "${fileName}.${fileType}")
+        val buffer = ByteArray(1204)
+        while (inStream.read(buffer).also { byteRead = it } != -1) {
+            byteSum += byteRead
+            fs.write(buffer, 0, byteRead)
+        }
+        fs.close()
+        return "SUCCESS"
+    } catch (e: FileNotFoundException) {
+        e.printStackTrace()
+        return e.localizedMessage
+    } catch (e: IOException) {
+        e.printStackTrace()
+        return e.localizedMessage
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return e.localizedMessage
+    }
 }
