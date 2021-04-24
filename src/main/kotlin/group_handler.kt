@@ -370,7 +370,11 @@ class MocaGroupMessageHandler(
                             resultString += "${(1..6).random()}"
                         }
                         2 -> {
-                            val k = paraList[1].toInt()
+                            val k = if (paraList[1].toInt() > 10) {
+                                10
+                            } else {
+                                paraList[1].toInt()
+                            }
                             resultString += "roll $k 个 1 ~ 6 的骰子\n结果为："
                             for (i in 1..k) {
                                 resultString += "${(1..6).random()} "

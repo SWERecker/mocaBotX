@@ -540,7 +540,7 @@ class Moca {
         // println("userOwnPan += 5, = $userOwnPan")
         // println("sumSignInDay = $sumSignInDay")
         return if (tempLastSignInTime.isNotFound()) {
-            sumSignInDay = 1
+            sumSignInDay += 1
             mocaDB.setConfig(userId, "USER", "signin_time", signInTime)
             mocaDB.setConfig(userId, "USER", "sum_day", sumSignInDay)
             val panResult = panNumberModify(userId, 5)
