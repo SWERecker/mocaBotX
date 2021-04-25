@@ -17,7 +17,7 @@ repositories {
 
 dependencies {
     //testImplementation(kotlin("test-junit"))
-    api("net.mamoe", "mirai-core", "2.4.2")
+    api("net.mamoe", "mirai-core", "2.6.2")
     //runtimeOnly("net.mamoe:mirai-login-solver-selenium:1.0-dev-16")
     api("org.mongodb", "mongodb-driver-sync", "4.2.2")
     api("redis.clients", "jedis", "3.5.2")

@@ -62,7 +62,6 @@ class MapSort {
         //自定义比较器
         val valCmp: java.util.Comparator<Map.Entry<String?, Int>> =
             Comparator { o1, o2 ->
-                // TODO Auto-generated method stub
                 o2.value - o1.value
             }
         val list: List<Map.Entry<String, Int>> = ArrayList(toSortMap.entries) //传入maps实体
