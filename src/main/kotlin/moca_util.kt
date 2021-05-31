@@ -8,7 +8,16 @@ import java.util.*
 import kotlin.Comparator
 import java.time.ZonedDateTime
 import java.net.URLConnection
+import java.util.regex.Matcher
+import java.util.regex.Pattern
 
+val protectedKeys = arrayListOf(
+    "关键词", "统计图片数量", "统计次数", "语音",
+    "使用说明", "青年大学习", "换lp次数", "签到",
+    "抽签", "lp", "设置图片cd", "设置复读概率",
+    "设置复读cd", "查看当前参数", "增加关键词",
+    "添加关键词", "删除关键词"
+)
 
 /**
  * 字符串相似度计算
@@ -128,11 +137,12 @@ fun randomDo(possibility: Int): Boolean {
  * 下载图片
  *
  * @param url 下载链接
+ * @param downloadPath 下载路径
  * @param fileName 文件名
  *
  * @return 下载状态/错误内容
  */
-fun downloadImage(url: String, category: String, fileName: String): String {
+fun downloadImage(url: String, downloadPath: String, fileName: String): Pair<String, String> {
     val urlObject = URL(url)
     var byteSum = 0
     var byteRead: Int
@@ -140,7 +150,6 @@ fun downloadImage(url: String, category: String, fileName: String): String {
         val conn: URLConnection = urlObject.openConnection()
         val inStream: InputStream = conn.getInputStream()
         val fileType = conn.contentType.split("/")[1]
-        val downloadPath = "cache" + File.separator + "upload" + File.separator + category + File.separator
         if (!File(downloadPath).exists()) {
             File(downloadPath).mkdirs()
         }
@@ -151,15 +160,32 @@ fun downloadImage(url: String, category: String, fileName: String): String {
             fs.write(buffer, 0, byteRead)
         }
         fs.close()
-        return "SUCCESS"
+        return Pair("SUCCESS", "${fileName}.${fileType}")
     } catch (e: FileNotFoundException) {
         e.printStackTrace()
-        return e.localizedMessage
+        return Pair("FAIL", e.localizedMessage)
     } catch (e: IOException) {
         e.printStackTrace()
-        return e.localizedMessage
+        return Pair("FAIL", e.localizedMessage)
     } catch (e: Exception) {
         e.printStackTrace()
-        return e.localizedMessage
+        return Pair("FAIL", e.localizedMessage)
     }
+}
+
+fun containSpecialChar(str: String): Boolean {
+    val regEx = "[ _`~!@#$%^&*()+=|{}':;',\\[\\].<>/?~！@#￥%……&*（）——+|{}【】‘；：”“’。，、？]|\n|\r|\t"
+    val p = Pattern.compile(regEx)
+    val m = p.matcher(str)
+    return m.find()
+}
+
+fun containProtectedKeys(str: String): Boolean {
+    var flag = false
+    for (key in protectedKeys) {
+        if (key in str) {
+            flag = true
+        }
+    }
+    return flag
 }

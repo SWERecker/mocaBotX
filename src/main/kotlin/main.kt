@@ -1,6 +1,7 @@
 package me.swe.main
 
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import net.mamoe.mirai.BotFactory
 import net.mamoe.mirai.alsoLogin
@@ -8,8 +9,9 @@ import net.mamoe.mirai.contact.Contact.Companion.sendImage
 import net.mamoe.mirai.contact.isOperator
 import net.mamoe.mirai.event.events.*
 import net.mamoe.mirai.message.data.*
-import net.mamoe.mirai.utils.BotConfiguration.MiraiProtocol.ANDROID_PAD
+import net.mamoe.mirai.utils.BotConfiguration.MiraiProtocol.ANDROID_PHONE
 import net.mamoe.mirai.utils.MiraiLogger
+import java.lang.NumberFormatException
 
 fun main(args: Array<String>) {
     WithConfiguration.main()
@@ -25,9 +27,12 @@ object WithConfiguration {
         val botQQ = moca.getBotConfig("QQ").toLong()
         val botPassword = moca.getBotConfig("PASS")
 
+        // moca.testFunction()
+        // return@runBlocking
+
         val bot = BotFactory.newBot(botQQ, botPassword) {
             fileBasedDeviceInfo() // 使用 device.json 存储设备信息
-            protocol = ANDROID_PAD // 切换协议
+            protocol = ANDROID_PHONE // 切换协议
             noNetworkLog()
         }.alsoLogin()
 
@@ -91,7 +96,10 @@ object WithConfiguration {
                     subject.sendMessage("错误，你至少需要包含一张图片")
                     return@subscribeAlways
                 }
-                subject.sendMessage(moca.submitPictures(groupId, message.filterIsInstance<Image>(), category))
+                subject.sendMessage(moca.submitPictures(groupId,
+                    message.filterIsInstance<Image>(), category)
+                )
+                return@subscribeAlways
             }
 
             if (!moca.isInCd(groupId, "replyCD")) {
@@ -171,8 +179,38 @@ object WithConfiguration {
                     // exclamation mark processor
                     groupMessageHandler.exclamationMarkProcessor().also {
                         if (it) {
+                            moca.setCd(groupId, "replyCD")
                             return@subscribeAlways
                         }
+                    }
+                }
+
+                if (messageContent.startsWith("查看群图片")) {
+                    val tempId = message.filterIsInstance<PlainText>()
+                        .firstOrNull()
+                        .toString()
+                        .substring(5)
+                        .replace("\n", "")
+                    val picId = try {
+                        tempId.toInt()
+                    }catch (e: NumberFormatException) {
+                        subject.sendMessage("错误：ID有误")
+                        return@subscribeAlways
+                    }
+                    if (picId < 1 || picId > 999) {
+                        subject.sendMessage("错误：ID范围：1~999")
+                        return@subscribeAlways
+                    }
+                    groupMessageHandler.sendGroupPicture(picId)
+                    moca.setCd(groupId, "replyCD")
+                    return@subscribeAlways
+                }
+
+                moca.matchGroupPicKey(groupId, messageContent).also {
+                    if (it) {
+                        groupMessageHandler.sendGroupPicture()
+                        moca.setCd(groupId, "replyCD")
+                        return@subscribeAlways
                     }
                 }
 
@@ -203,7 +241,21 @@ object WithConfiguration {
 
         bot.eventChannel.subscribeAlways<FriendMessageEvent> {
             if (moca.isSuperman(sender.id)) {
-                subject.sendMessage("Hello Master.")
+                if (message.content.startsWith("#gg")) {
+                    val toSendContent = mutableListOf<SingleMessage>()
+                    message.forEach {
+                        if (it.content.startsWith("#gg")) {
+                            toSendContent.add(it.content.replace("#gg\n", "").toPlainText())
+                        } else {
+                            toSendContent.add(it)
+                        }
+                    }
+                    bot.groups.forEach {
+                        mocaLogger.info("Sending Message to: " + it.id.toString())
+                        it.sendMessage(toSendContent.toMessageChain())
+                        delay(1000)
+                    }
+                }
             }
         }
 

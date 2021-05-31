@@ -4,6 +4,7 @@ package me.swe.main
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.message.data.Image.Key.queryUrl
 import net.mamoe.mirai.utils.MiraiLogger
+import org.bson.Document
 import java.io.File
 import java.io.InputStream
 
@@ -173,6 +174,7 @@ class Moca {
         val groupKeyword = getGroupKeyword(groupId)
         return if (toSetLpName in groupKeyword.keys) {
             mocaDB.setConfig(userId, "USER", "lp", toSetLpName)
+            mocaDB.updateUserChangeLpTimes(userId)
             buildMessageChain {
                 +At(userId)
                 +PlainText(" 设置lp为：$toSetLpName")
@@ -401,6 +403,13 @@ class Moca {
      */
     fun updateCount(groupId: Long, name: String) {
         mocaDB.updateGroupCount(groupId, name)
+    }
+
+    /**
+     * 调用mocaDB.getGroupPicKeywords
+     */
+    fun getGroupPicKeyword(groupId: Long): String {
+        return mocaDB.getGroupPicKeywords(groupId)
     }
 
     /**
@@ -636,7 +645,14 @@ class Moca {
         return PlainText("null").toMessageChain()
     }
 
-    suspend fun submitPictures(groupId: Long, images: List<Image>, category: String): String {
+    /**
+     * 提交图片
+     *
+     * @param groupId 群号
+     * @param images 图片列表
+     * @param category 分类
+     */
+    suspend fun submitPictures(groupId: Long, images: List<Image>, category: String): MessageChain {
         var successImageCount = 0
         var exceptionImageCount = 0
         var exceptionMessage = ""
@@ -645,16 +661,17 @@ class Moca {
         } else {
             "${groupId}/${category}"
         }
+        val downloadPath = "cache" + File.separator + "upload" + File.separator + imageCategory + File.separator
         images.forEach { image ->
             val imageId = image.imageId
             val imageUrl = image.queryUrl()
             val fileName = imageId.substring(imageId.indexOf("{") + 1, imageId.indexOf("}") - 1)
-            downloadImage(imageUrl, imageCategory, fileName).also {
-                if (it == "SUCCESS") {
+            downloadImage(imageUrl, downloadPath, fileName).also {
+                if (it.first == "SUCCESS") {
                     successImageCount++
                 } else {
                     exceptionImageCount++
-                    exceptionMessage += it + "\n"
+                    exceptionMessage += it.second + "\n"
                 }
             }
         }
@@ -662,6 +679,112 @@ class Moca {
         if (exceptionImageCount != 0) {
             result += "，失败${exceptionImageCount}张\n发生错误：\n" + exceptionMessage
         }
-        return result
+        return PlainText(result).toMessageChain()
+    }
+
+    /**
+     * 提交群图片
+     *
+     * @param groupId 群号
+     * @param images 图片列表
+     * @param pic_id 图片id
+     *
+     * @return 提交结果
+     */
+    suspend fun submitGroupPictures(groupId: Long, images: List<Image>, pic_id: Int): MessageChain {
+        val downloadPath = "resource" + File.separator + "group_pic" + File.separator + groupId.toString() + File.separator
+        var dbPicId = pic_id
+        if (pic_id == -1) {
+            dbPicId = mocaDB.getCurrentPicCount(groupId) + 1
+        }
+        if (dbPicId < 1 || dbPicId > 999) {
+            return PlainText("错误：ID范围：1~999").toMessageChain()
+        }
+        deleteGroupPicById(groupId, dbPicId)
+        val imageUrl = images.first().queryUrl()
+        val fileName = "img_${dbPicId}"
+        val uploadTime = System.currentTimeMillis() / 1000
+        downloadImage(imageUrl, downloadPath, fileName).also {
+            return if (it.first == "SUCCESS") {
+                mocaDB.updateNewGroupPicture(groupId, it.second, dbPicId, uploadTime)
+                PlainText("提交群图片：成功提交，图片ID为${dbPicId}").toMessageChain()
+            } else {
+                PlainText("提交群图片失败，发生错误：\n" + it.second).toMessageChain()
+            }
+        }
+    }
+
+    fun deleteGroupPicById(groupId: Long, picId: Int): String {
+        val currentPic = getGroupPicById(groupId, picId)
+        if (!currentPic.isNullOrEmpty()) {
+            val picFile = File("resource" + File.separator + "group_pic" +
+                    File.separator + groupId.toString() + File.separator + currentPic["name"])
+            return try {
+                if (picFile.exists()) {
+                    picFile.delete()
+                }
+                val existDocument = mocaDB.getCurrentPics(groupId)
+                existDocument.remove(picId.toString())
+                mocaDB.saveGroupPicture(groupId, existDocument)
+                mocaLogger.info("[${groupId}] Delete DB record, deleteResult")
+                "成功删除了图片ID=$picId."
+            } catch (e: Exception) {
+                mocaLogger.error("[${groupId}] Delete file $picFile failed")
+                "发生了一些错误."
+            }
+        } else {
+            return "ID=${picId}的图片不存在."
+        }
+
+    }
+
+
+    fun matchGroupPicKey(groupId: Long, messageContent: String): Boolean {
+        val groupPicKeys = mocaDB.getGroupPicKeywords(groupId)
+        if (groupPicKeys == "") { return false }
+        return Regex(groupPicKeys).find(messageContent.toLowerCase()) != null
+    }
+
+    fun editGroupPicKeys(groupId: Long, key: String, operation: String = "ADD"): MessageChain {
+        val groupPicKeys = mocaDB.getGroupPicKeywords(groupId)
+        val keysList = groupPicKeys.split("|").toMutableList()
+        when(operation) {
+            "ADD" -> {
+                if (groupPicKeys == "") {
+                    mocaDB.saveGroupPicKeywords(groupId, key)
+                    return PlainText("成功添加群关键词【$key】").toMessageChain()
+                } else if (Regex(groupPicKeys).find(key.toLowerCase()) != null) {
+                    return PlainText("错误：已存在能识别【${key}】的群关键词，请勿重复添加").toMessageChain()
+                }
+                keysList.add(key)
+                mocaDB.saveGroupPicKeywords(groupId, keysList.joinToString("|"))
+                return PlainText("成功添加群关键词【$key】").toMessageChain()
+            }
+            "REMOVE" -> {
+                keysList.remove(key).also {
+                    return if (it) {
+                        mocaDB.saveGroupPicKeywords(groupId, keysList.joinToString("|"))
+                        PlainText("成功删除了群关键词【${key}】").toMessageChain()
+                    } else {
+                        PlainText("未找到群关键词【${key}】").toMessageChain()
+                    }
+                }
+            }
+        }
+        return PlainText("NO OPERATION").toMessageChain()
+    }
+
+    fun getGroupPicById(groupId: Long, picId: Int): Document {
+        val currentPics = mocaDB.getCurrentPics(groupId)
+        val queryPic = currentPics[picId.toString()]
+        return if (queryPic != null) {
+            currentPics[picId.toString()] as Document
+        } else {
+            Document()
+        }
+    }
+
+    fun testFunction(){
+        // println(send)
     }
 }

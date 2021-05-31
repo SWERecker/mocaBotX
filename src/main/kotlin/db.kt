@@ -26,6 +26,7 @@ val colGroupKeyword: MongoCollection<Document> = db.getCollection("group_keyword
 val colGroupConfig: MongoCollection<Document> = db.getCollection("group_config")
 val colGroupCount: MongoCollection<Document> = db.getCollection("group_count")
 val colUserConfig: MongoCollection<Document> = db.getCollection("user_config")
+val colGroupPic: MongoCollection<Document> = db.getCollection("group_pic")
 val mocaDBLogger = MiraiLogger.create("MocaDBLogger")
 val redisPool = JedisPool(JedisPoolConfig())
 
@@ -197,6 +198,29 @@ class MocaDatabase {
         }
     }
 
+    /**
+     * 将群关键词保存至数据库.
+     *
+     * @param groupId 群号
+     * @param newGroupPicKeywords 要存储的群关键词
+     *
+     * @return
+     *
+     */
+    fun saveGroupPicKeywords(groupId: Long, newGroupPicKeywords: String) {
+        val query = Document()
+            .append("group", groupId)
+        val operationDocument = Document("${'$'}set", Document("key", newGroupPicKeywords))
+        val saveResult = colGroupPic.updateOne(query, operationDocument)
+        if (saveResult.modifiedCount > 0) {
+            mocaDBLogger.info("[$groupId] GroupPicDb modified count=${saveResult.modifiedCount}")
+        }else {
+            query.append("key", newGroupPicKeywords)
+            val insertResult = colGroupPic.insertOne(query)
+            mocaDBLogger.info("[$groupId] GroupPicDb inserted: ${insertResult.insertedId}")
+        }
+    }
+
 
     /**
      * 从数据库中获取某群组的次数统计.
@@ -339,6 +363,85 @@ class MocaDatabase {
             } catch (e: NumberFormatException) {
                 mocaDBLogger.error("NumberFormatException in group: ${queryResult["group"]}")
             }
+        }
+    }
+
+    fun getGroupPicKeywords(groupId: Long): String{
+        val query = Document()
+            .append("group", groupId)
+        val queryResult = colGroupPic.find(query)
+            .projection(
+                Projections.fields(Projections.excludeId(),
+                Projections.include("key"))
+            )
+            .first()
+        if (!queryResult.isNullOrEmpty()){
+            return queryResult["key"].toString()
+        }
+        return ""
+    }
+
+    fun getCurrentPicCount(groupId: Long): Int{
+        getCurrentPics(groupId).size.also {
+            mocaDBLogger.info("Current pic count: $it")
+            return it
+        }
+    }
+
+    fun getCurrentPics(groupId: Long): Document {
+        val query = Document()
+            .append("group", groupId)
+        val queryResult = colGroupPic.find(query)
+            .projection(Projections.fields(
+                Projections.excludeId(),
+                Projections.include("pics")))
+            .first()
+        if (!queryResult.isNullOrEmpty()) {
+            return queryResult["pics"] as Document
+        }
+        return Document()
+    }
+
+    fun updateNewGroupPicture(groupId: Long, fileName: String, imgId: Int, saveTime: Long){
+        val picDocument = Document()
+            .append("name", fileName)
+            .append("time", saveTime)
+        val saveDocument = getCurrentPics(groupId)
+            .append(imgId.toString(), picDocument)
+        saveGroupPicture(groupId, saveDocument)
+    }
+
+    fun saveGroupPicture(groupId: Long, newDocument: Document): String{
+        val query = Document()
+            .append("group", groupId)
+        val operationDocument = Document("${'$'}set", Document("pics", newDocument))
+        val saveResult = colGroupPic.updateOne(query, operationDocument)
+        if (saveResult.modifiedCount > 0) {
+            mocaDBLogger.info("[$groupId] updated group pic")
+        } else {
+            query.append("pics", newDocument)
+            val insertResult = colGroupPic.insertOne(query)
+            mocaDBLogger.info("[$groupId] insert new group pic ${insertResult.insertedId}")
+        }
+        return ""
+    }
+
+    fun updateUserChangeLpTimes(userId: Long) {
+        val query = Document()
+            .append("qq", userId)
+        var delta = 1
+        val queryResult = colUserConfig.find(query)
+            .projection(Projections.fields(Projections.excludeId()))
+            .first()
+        if (!queryResult.isNullOrEmpty()) {
+            if ("clp_time" in queryResult) {
+                if (queryResult["clp_time"].toString().toInt() == -1) {
+                    delta = 2
+                }
+            }
+            val operationDocument = Document("${'$'}inc", Document("clp_time", delta))
+            val updateResult = colUserConfig.updateOne(query, operationDocument)
+            mocaDBLogger.info("User $userId clp_time + $delta, modified count = ${updateResult.modifiedCount}")
         }
     }
 }

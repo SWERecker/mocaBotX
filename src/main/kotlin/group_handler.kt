@@ -8,6 +8,7 @@ import net.mamoe.mirai.contact.nameCardOrNick
 import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.message.code.MiraiCode.deserializeMiraiCode
 import net.mamoe.mirai.message.data.*
+import net.mamoe.mirai.utils.ExternalResource.Companion.sendAsImageTo
 import net.mamoe.mirai.utils.ExternalResource.Companion.toExternalResource
 import net.mamoe.mirai.utils.MiraiLogger
 import java.io.File
@@ -140,6 +141,13 @@ class MocaGroupMessageHandler(
                     subj.sendMessage("错误，参数数量有误")
                     return true
                 }
+                if (paras[0] == "" || paras[1] == "" ||
+                    containSpecialChar(paras[0]) || containSpecialChar(paras[1]) ||
+                    containProtectedKeys(paras[0]) || containProtectedKeys(paras[1])
+                ) {
+                    subj.sendMessage("错误，参数为空或包含不允许的特殊字符或包含摩卡的关键词")
+                    return true
+                }
                 if (messageContent.substring(0, 2) == "添加") {
                     subj.sendMessage(moca.keywordEdit(groupId, paras, "ADD"))
                 } else {
@@ -147,7 +155,33 @@ class MocaGroupMessageHandler(
                 }
                 return true
             }
+
+            (messageContent.startsWith("添加群关键词") || messageContent.startsWith("删除群关键词")) -> {
+                val toEditKey = messageContent
+                    .substring(6)
+                    .replace(" ", "")
+                return if (toEditKey != "" && !containSpecialChar(toEditKey) && !containProtectedKeys(toEditKey)) {
+                    if (messageContent.substring(0, 2) == "添加") {
+                        subj.sendMessage(moca.editGroupPicKeys(groupId, toEditKey, "ADD"))
+                    } else {
+                        subj.sendMessage(moca.editGroupPicKeys(groupId, toEditKey, "REMOVE"))
+                    }
+                    true
+                } else {
+                    subj.sendMessage("错误，参数为空或包含不允许的特殊字符或包含摩卡的关键词")
+                    true
+                }
+            }
+
+            messageContent.startsWith("查看群关键词") -> {
+                val groupPicKeys = moca.getGroupPicKeyword(groupId)
+                if (groupPicKeys == "") {
+                    subj.sendMessage("群关键词为空.")
+                }
+                subj.sendMessage("群关键词：$groupPicKeys")
+            }
         }
+
 
         if (messageContent.startsWith("打开") || messageContent.startsWith("关闭")) {
             val operationString = messageContent.subSequence(0, 2)
@@ -185,6 +219,46 @@ class MocaGroupMessageHandler(
                 }
             }
         }
+
+        if (messageContent.startsWith("提交群图片")) {
+            val tempId = event.message.filterIsInstance<PlainText>()
+                .firstOrNull()
+                .toString()
+                .substring(5)
+                .replace("\n", "")
+            val picId = try {
+                tempId.toInt()
+            }catch (e: NumberFormatException) {
+                -1
+            }
+            if (!event.message.contains(Image)) {
+                subj.sendMessage("错误：你需要包含一张图片")
+                return true
+            }
+            subj.sendMessage(moca.submitGroupPictures(groupId,
+                event.message.filterIsInstance<Image>(), picId)
+            )
+            return true
+        }
+
+        if (messageContent.startsWith("删除群图片")) {
+            val tempId = event.message.filterIsInstance<PlainText>()
+                .firstOrNull()
+                .toString()
+                .substring(5)
+                .replace("\n", "")
+            val picId = try {
+                tempId.toInt()
+            }catch (e: NumberFormatException) {
+                -1
+            }
+            moca.deleteGroupPicById(groupId, picId).also {
+                if (it != "") {
+                    subj.sendMessage(it)
+                }
+            }
+            return true
+        }
         return false
     }
 
@@ -210,7 +284,7 @@ class MocaGroupMessageHandler(
     suspend fun getSenderChangeLpTimes(): Boolean {
         val changeLpTimes = moca.getChangeLpTimes(senderId)
         subj.sendMessage(
-            if (changeLpTimes == 0) {
+            if (changeLpTimes <= 0) {
                 buildMessageChain {
                     +At(event.sender)
                     +PlainText(" 你还没有换过lp呢~")
@@ -278,7 +352,7 @@ class MocaGroupMessageHandler(
                     subj.sendImage(File(moca.buildGroupCountPicture(groupId)))
                     return true
                 }
-                messageContent.contains("语音") -> {
+                messageContent.contains("语音") || messageContent.contains("说话") -> {
                     sendVoice()
                     return true
                 }
@@ -587,6 +661,11 @@ class MocaGroupMessageHandler(
         return false
     }
 
+    /**
+     * 复读机
+     *
+     * @return 是否需要复读
+     */
     fun groupRepeatSaver(): Boolean {
         // mutableMapOf<Long, MutableMap<Int, String>>()
         if (mapGroupRepeater[groupId].isNullOrEmpty()) {
@@ -621,10 +700,36 @@ class MocaGroupMessageHandler(
         return false
     }
 
+    /**
+     * 发送复读内容.
+     */
     suspend fun sendRepeatContent() {
         val toSendMessage = mapGroupRepeater[groupId]?.get(1).toString().deserializeMiraiCode()
         subj.sendMessage(toSendMessage)
         mapGroupRepeater[groupId]?.set(3, event.message.serializeToMiraiCode())
     }
 
+    /**
+     * 发送群图片.
+     */
+    suspend fun sendGroupPicture(picId: Int = -1) {
+        if (picId == -1) {
+            val groupPicFolder = File("resource" + File.separator + "group_pic" + File.separator + groupId.toString())
+            val groupPics = groupPicFolder.listFiles()
+            if (!groupPics.isNullOrEmpty()) {
+                File(groupPics.random().absolutePath).sendAsImageTo(event.group)
+            } else {
+                event.group.sendMessage("群图片为空，请发送【使用说明】查看添加方法.")
+            }
+        } else {
+            val toSendPic = moca.getGroupPicById(groupId, picId)
+            if (!toSendPic.isNullOrEmpty()) {
+                File("resource" + File.separator + "group_pic" + File.separator +
+                        groupId.toString() + File.separator + toSendPic["name"])
+                    .sendAsImageTo(event.group)
+            } else {
+                event.group.sendMessage("指定ID=${picId}的图片不存在.")
+            }
+        }
+    }
 }
