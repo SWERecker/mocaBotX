@@ -452,6 +452,7 @@ class Moca {
         val userPan = getUserPan(userId)
         return if (delta > 0) {
             setUserPan(userId, userPan + delta)
+            mocaLog("UserPanNumChange", targetId = userId, description = "$delta")
             Pair(true, getUserPan(userId))
         } else {
             if (-delta > userPan) {
@@ -459,6 +460,7 @@ class Moca {
                 Pair(false, userPan)
             } else {
                 setUserPan(userId, userPan + delta)
+                mocaLog("UserPanNumChange", targetId = userId, description = "$delta")
                 Pair(true, getUserPan(userId))
             }
         }
@@ -490,6 +492,7 @@ class Moca {
                 mocaDB.setConfig(userId, "USER", "last_buy_time", currentTimestamp)
                 val buyCount = (1..10).random()
                 val modifyResult = panNumberModify(userId, buyCount)
+                mocaLog("UserBuyPan", targetId = userId, description = "firstTime = True")
                 Pair(buyCount, modifyResult.second.toLong())
             } else {
                 val userLastBuyTime = it.toString().toInt()
@@ -499,6 +502,7 @@ class Moca {
                     mocaDB.setConfig(userId, "USER", "last_buy_time", currentTimestamp)
                     val buyCount = (1..10).random()
                     val modifyResult = panNumberModify(userId, buyCount)
+                    mocaLog("UserBuyPan", targetId = userId, description = "firstTime = False")
                     Pair(10 + buyCount, modifyResult.second.toLong())
                 }
             }
@@ -553,14 +557,19 @@ class Moca {
             mocaDB.setConfig(userId, "USER", "signin_time", signInTime)
             mocaDB.setConfig(userId, "USER", "sum_day", sumSignInDay)
             val panResult = panNumberModify(userId, 5)
+            mocaLog("UserSignIn", targetId = userId,
+                description = "firstTime = True, sumSignInDay = $sumSignInDay, userOwnPan = $userOwnPan")
             arrayListOf(1, signInTime, sumSignInDay, panResult.second)
         } else {
             sumSignInDay += 1
             mocaDB.setConfig(userId, "USER", "signin_time", signInTime)
             mocaDB.setConfig(userId, "USER", "sum_day", sumSignInDay)
             val panResult = panNumberModify(userId, 5)
+            mocaLog("UserSignIn", targetId = userId,
+                description = "firstTime = False, sumSignInDay = $sumSignInDay, userOwnPan = $userOwnPan")
             arrayListOf(0, signInTime, sumSignInDay, panResult.second)
         }
+
     }
 
     /**
@@ -606,6 +615,8 @@ class Moca {
         mocaDB.setConfig(userId, "USER", "draw_time", drawTime)
         mocaDB.setConfig(userId, "USER", "today_draw_status", luckString)
         mocaDB.setConfig(userId, "USER", "today_lucky_num", luckyNumber)
+        mocaLog("UserDraw", groupId = groupId, targetId = userId,
+            description = "luck = {$luckString}, luck_num = {$luckyNumber} lp = {$pictureFile}")
         return arrayListOf(0, drawTime, luckString, luckyNumber, pictureFile)
     }
 
@@ -626,6 +637,7 @@ class Moca {
                         keysList.add(key)
                         groupKeyword[name] = keysList.joinToString("|")
                         mocaDB.saveGroupKeyword(groupId, groupKeyword.toMap())
+                        mocaLog("GroupAddKey", groupId = groupId, description = key)
                         PlainText("成功向“${name}”中添加了关键词“${key}”").toMessageChain()
                     }
                 }
@@ -634,6 +646,7 @@ class Moca {
                         return if (it) {
                             groupKeyword[name] = keysList.joinToString("|")
                             mocaDB.saveGroupKeyword(groupId, groupKeyword.toMap())
+                            mocaLog("GroupRemoveKey", groupId = groupId, description = key)
                             PlainText("成功删除了关键词“${key}”").toMessageChain()
                         } else {
                             PlainText("${name}中未找到关键词“${key}”").toMessageChain()
@@ -679,6 +692,7 @@ class Moca {
         if (exceptionImageCount != 0) {
             result += "，失败${exceptionImageCount}张\n发生错误：\n" + exceptionMessage
         }
+        mocaLog("GroupUploadPic", groupId = groupId, description = result)
         return PlainText(result).toMessageChain()
     }
 
@@ -726,7 +740,9 @@ class Moca {
                 val existDocument = mocaDB.getCurrentPics(groupId)
                 existDocument.remove(picId.toString())
                 mocaDB.saveGroupPicture(groupId, existDocument)
-                mocaLogger.info("[${groupId}] Delete DB record, deleteResult")
+                mocaLogger.info("[${groupId}] Delete group pic ID = $picId")
+                mocaLog("GroupDeletePic", groupId = groupId,
+                    description = "ID = $picId, picFile = $picFile")
                 "成功删除了图片ID=$picId."
             } catch (e: Exception) {
                 mocaLogger.error("[${groupId}] Delete file $picFile failed")
@@ -758,12 +774,14 @@ class Moca {
                 }
                 keysList.add(key)
                 mocaDB.saveGroupPicKeywords(groupId, keysList.joinToString("|"))
+                mocaLog("GroupAddPicKey", groupId = groupId, description = key)
                 return PlainText("成功添加群关键词【$key】").toMessageChain()
             }
             "REMOVE" -> {
                 keysList.remove(key).also {
                     return if (it) {
                         mocaDB.saveGroupPicKeywords(groupId, keysList.joinToString("|"))
+                        mocaLog("GroupRemovePicKey", groupId = groupId, description = key)
                         PlainText("成功删除了群关键词【${key}】").toMessageChain()
                     } else {
                         PlainText("未找到群关键词【${key}】").toMessageChain()
@@ -784,7 +802,10 @@ class Moca {
         }
     }
 
-    fun testFunction(){
-        // println(send)
+    fun reloadAllGroupKeyword (): String {
+        mocaDB.loadAllGroupKeyword()
+        mocaLog("GroupReloadAllKeyword", description = "success")
+        return "success"
     }
+    fun testFunction(){ }
 }

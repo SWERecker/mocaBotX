@@ -274,6 +274,11 @@ class MocaGroupMessageHandler(
                 subj.sendMessage(resultMessage)
                 return true
             }
+            "RELOAD_KEY" -> {
+                val reloadResult = moca.reloadAllGroupKeyword()
+                subj.sendMessage(reloadResult)
+                return true
+            }
         }
         return false
     }

@@ -27,6 +27,7 @@ val colGroupConfig: MongoCollection<Document> = db.getCollection("group_config")
 val colGroupCount: MongoCollection<Document> = db.getCollection("group_count")
 val colUserConfig: MongoCollection<Document> = db.getCollection("user_config")
 val colGroupPic: MongoCollection<Document> = db.getCollection("group_pic")
+val colMocaLog: MongoCollection<Document> = db.getCollection("moca_log")
 val mocaDBLogger = MiraiLogger.create("MocaDBLogger")
 val redisPool = JedisPool(JedisPoolConfig())
 
@@ -97,6 +98,7 @@ class MocaDatabase {
         }
         if (saveResult.upsertedId != null || saveResult.modifiedCount > 0) {
             mocaDBLogger.info("Set $setType $userId $arg => $value")
+            mocaLog("DbSetConfig", targetId = userId, description = "type = $setType, arg = $arg, value = $value")
             if (setType == "GROUP") {
                 mocaDBLogger.info("Load $userId config to cache")
                 loadGroupConfig(userId.toString())
@@ -148,6 +150,7 @@ class MocaDatabase {
                 .append("keyword", templateGroupKeyword)
             val insertResult = colGroupKeyword.insertOne(toInsertDocument)
             if (insertResult.wasAcknowledged()) {
+                mocaLog("GroupInitKeyword", groupId = groupId)
                 mocaDBLogger.info("Inserted, id=" + insertResult.insertedId)
                 keyInited = true
             }
@@ -166,11 +169,13 @@ class MocaDatabase {
             queryResult["group"] = groupIdInt
             val insertResult = colGroupConfig.insertOne(queryResult)
             if (insertResult.wasAcknowledged()) {
+                mocaLog("GroupInitConfig", groupId = groupId)
                 mocaDBLogger.info("Inserted, id=" + insertResult.insertedId)
                 configInited = true
             }
         }
         if (keyInited && configInited) {
+            mocaLog("GroupInit", groupId = groupId, description = "success")
             mocaDBLogger.info("Successfully initialized group $groupIdInt")
             loadGroupKeyword(groupId.toString())
             loadGroupConfig(groupId.toString())
@@ -273,6 +278,7 @@ class MocaDatabase {
             val operationDocument = Document("${'$'}inc", Document(name, delta))
             val operationResult = colGroupCount.updateOne(query, operationDocument)
             if (operationResult.modifiedCount > 0) {
+                mocaLog("GroupCountUpdate", groupId = groupId, description = name)
                 mocaDBLogger.info("[$groupId] $name += 1")
             return true
         }
@@ -409,6 +415,8 @@ class MocaDatabase {
         val saveDocument = getCurrentPics(groupId)
             .append(imgId.toString(), picDocument)
         saveGroupPicture(groupId, saveDocument)
+        mocaLog("GroupUpdateGroupPic", groupId = groupId,
+            description = "ID = $imgId, fileName = $fileName")
     }
 
     fun saveGroupPicture(groupId: Long, newDocument: Document): String{
@@ -426,6 +434,12 @@ class MocaDatabase {
         return ""
     }
 
+    /**
+     * 换lp次数++
+     *
+     * @param userId 用户QQ
+     *
+     */
     fun updateUserChangeLpTimes(userId: Long) {
         val query = Document()
             .append("qq", userId)
@@ -441,9 +455,11 @@ class MocaDatabase {
             }
             val operationDocument = Document("${'$'}inc", Document("clp_time", delta))
             val updateResult = colUserConfig.updateOne(query, operationDocument)
+            mocaLog("UserUpdateClpTimes", userId)
             mocaDBLogger.info("User $userId clp_time + $delta, modified count = ${updateResult.modifiedCount}")
         }
     }
+
 }
 
 /**
@@ -471,4 +487,19 @@ fun loadIndexFile(): Int {
         }
         return peopleCount
     }
+}
+
+/**
+ * 记录日志
+ */
+fun mocaLog(eventName: String, targetId: Long = 0L, groupId: Long = 0L, description: String = "-") {
+    val logTime = System.currentTimeMillis() / 1000
+    val query = Document()
+        .append("time", logTime)
+        .append("time_string", logTime.toDateStr())
+        .append("event", eventName)
+        .append("group", groupId)
+        .append("target", targetId)
+        .append("description", description)
+    colMocaLog.insertOne(query)
 }

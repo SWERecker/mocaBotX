@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "me.swe"
-version = "1.0.4-PHONE-265"
+version = "1.0.5-PHONE-SELENIUM-266"
 
 repositories {
     // mavenCentral()
@@ -17,8 +17,8 @@ repositories {
 
 dependencies {
     // testImplementation(kotlin("test-junit"))
-    api("net.mamoe", "mirai-core", "2.6.5")
-    // runtimeOnly("net.mamoe:mirai-login-solver-selenium:1.0-dev-17")
+    api("net.mamoe", "mirai-core", "2.6.6")
+    runtimeOnly("net.mamoe:mirai-login-solver-selenium:1.0-dev-17")
     api("org.mongodb", "mongodb-driver-sync", "4.2.2")
     api("redis.clients", "jedis", "3.5.2")
     api("org.slf4j", "slf4j-log4j12", "1.7.30")

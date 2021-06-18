@@ -9,7 +9,7 @@ import net.mamoe.mirai.contact.Contact.Companion.sendImage
 import net.mamoe.mirai.contact.isOperator
 import net.mamoe.mirai.event.events.*
 import net.mamoe.mirai.message.data.*
-import net.mamoe.mirai.utils.BotConfiguration.MiraiProtocol.ANDROID_PAD
+import net.mamoe.mirai.utils.BotConfiguration.MiraiProtocol.ANDROID_PHONE
 import net.mamoe.mirai.utils.MiraiLogger
 import java.lang.NumberFormatException
 
@@ -32,7 +32,7 @@ object WithConfiguration {
 
         val bot = BotFactory.newBot(botQQ, botPassword) {
             fileBasedDeviceInfo() // 使用 device.json 存储设备信息
-            protocol = ANDROID_PAD // 切换协议
+            protocol = ANDROID_PHONE // 切换协议
             noNetworkLog()
         }.alsoLogin()
 
@@ -270,6 +270,8 @@ object WithConfiguration {
             if (moca.isSuperman(member.id)) {
                 group.sendMessage("开发者${member.id}被移除，自动退出群组...")
                 mocaLogger.warning("Superman leaving group: ${group.id}.")
+                mocaLog("SupermanLeaveEvent", groupId = groupId,
+                    description = "memberId = ${member.id}")
                 group.quit()
             }
         }
@@ -287,10 +289,16 @@ object WithConfiguration {
 
         bot.eventChannel.subscribeAlways<BotInvitedJoinGroupRequestEvent> {
             mocaLogger.info("Moca invited to join group ${groupId}.")
+            mocaLog("BotInvitedJoinGroupRequestEvent", groupId = groupId,
+                description = "invitorId = $invitorId")
             if (moca.isSuperman(invitorId)) {
                 mocaLogger.info("Superman invited to join group. Auto accept.")
                 accept()
             }
+        }
+
+        bot.eventChannel.subscribeAlways<BotLeaveEvent> {
+            mocaLog("BotLeaveEvent", groupId = group.id)
         }
     }
 }
