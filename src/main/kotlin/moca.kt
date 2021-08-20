@@ -256,12 +256,14 @@ class Moca {
         val currentTimestamp = System.currentTimeMillis() / 1000
         val cdString = "${id}_${cdType}"
         if (cdLength != 0) {
-            mapMocaCd[cdString] = currentTimestamp + cdLength.toLong()
-            mocaLogger.info("$cdString set to ${currentTimestamp + cdLength}")
+            val finalCdLength = if (cdLength > 10) cdLength else 10
+            mapMocaCd[cdString] = currentTimestamp + finalCdLength.toLong()
+            mocaLogger.info("$cdString set to ${currentTimestamp + finalCdLength}")
         } else {
-            val configCdLength = getGroupConfig(id, cdType).toString().toLong()
-            mapMocaCd[cdString] = currentTimestamp + configCdLength
-            mocaLogger.info("$cdString +$configCdLength")
+            val configCdLength = getGroupConfig(id, cdType).toString().toInt()
+            val finalCdLength = if (configCdLength > 10) configCdLength else 10
+            mapMocaCd[cdString] = currentTimestamp + finalCdLength.toLong()
+            mocaLogger.info("$cdString +$finalCdLength")
         }
     }
 
@@ -807,5 +809,11 @@ class Moca {
         mocaLog("GroupReloadAllKeyword", description = "success")
         return "success"
     }
+
+    fun isReachedMessageLimit(groupId: Long): Boolean {
+        // mocaLogger.info("current remain: ${mapGroupFrequencyLimiter[groupId]}")
+        return mapGroupFrequencyLimiter[groupId] == 0
+    }
+
     fun testFunction(){ }
 }

@@ -19,6 +19,8 @@ val mapGroupKeywords = mutableMapOf<Long, Map<String, String>>()
 val mapGroupConfig = mutableMapOf<Long, Map<String, Any>>()
 val mapMocaCd = mutableMapOf<String, Long>()
 var mapGroupRepeater = mutableMapOf<Long, MutableMap<Int, String>>()
+var mapGroupFrequencyLimiter = mutableMapOf<Long, Int>()
+var resetGroupFrequencyLimiterTime: Long = 0L
 
 val mongoClient: MongoClient = MongoClients.create()
 val db: MongoDatabase = mongoClient.getDatabase("moca")

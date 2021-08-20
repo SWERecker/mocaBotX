@@ -1,6 +1,7 @@
 package me.swe.main
 
 
+import io.ktor.util.date.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import net.mamoe.mirai.BotFactory
@@ -26,7 +27,7 @@ object WithConfiguration {
 
         val botQQ = moca.getBotConfig("QQ").toLong()
         val botPassword = moca.getBotConfig("PASS")
-
+        resetGroupFrequencyLimiterTime = System.currentTimeMillis() / 1000
         // moca.testFunction()
         // return@runBlocking
 
@@ -44,6 +45,19 @@ object WithConfiguration {
             val messageContent = this.message.content
             val senderId = sender.id
             val groupId = group.id
+            val messageLimit = 8
+            if (groupId !in mapGroupFrequencyLimiter) {
+                mapGroupFrequencyLimiter[groupId] = messageLimit
+                mocaLogger.info("Init GFL. $groupId MessageLeft = $messageLimit")
+            }
+
+            if ((System.currentTimeMillis() / 1000) - resetGroupFrequencyLimiterTime > 60) {
+                mocaLogger.info("reset message limit after 60s")
+                mapGroupFrequencyLimiter.forEach {
+                    mapGroupFrequencyLimiter[it.key] = messageLimit
+                }
+                resetGroupFrequencyLimiterTime = System.currentTimeMillis() / 1000
+            }
 
             if (moca.isSuperman(senderId)) {
                 groupMessageHandler.supermanOperations().also {
@@ -51,6 +65,11 @@ object WithConfiguration {
                         return@subscribeAlways
                     }
                 }
+            }
+
+            if (moca.isReachedMessageLimit(groupId)) {
+                mocaLogger.warning("Group messageLimit reached!!!")
+                return@subscribeAlways
             }
 
             val atMessage: At? = this.message.findIsInstance<At>()
@@ -71,8 +90,12 @@ object WithConfiguration {
             }
 
             if (moca.groupConfigEnabled(groupId, "pan")) {
+                if (moca.isInCd(groupId, "replyCD")) {
+                    return@subscribeAlways
+                }
                 groupMessageHandler.panOperations().also {
                     if (it) {
+                        moca.setCd(groupId, "replyCD")
                         return@subscribeAlways
                     }
                 }
@@ -299,6 +322,12 @@ object WithConfiguration {
 
         bot.eventChannel.subscribeAlways<BotLeaveEvent> {
             mocaLog("BotLeaveEvent", groupId = group.id)
+        }
+
+        bot.eventChannel.subscribeAlways<GroupMessagePostSendEvent> {
+            val currentLimit: Int? = mapGroupFrequencyLimiter[it.target.id]?.minus(1)
+            val newLimit = currentLimit ?: 1
+            mapGroupFrequencyLimiter[it.target.id] = newLimit
         }
     }
 }

@@ -508,6 +508,7 @@ class MocaGroupMessageHandler(
                         subj.sendMessage("${it}为：${(0..100).random()}")
                     }
                 }
+                return true
             }
         }
         return false
