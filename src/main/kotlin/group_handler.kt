@@ -22,7 +22,7 @@ class MocaGroupMessage(
     private val subj = event.subject
     suspend fun messageHandler() {
         val messageContent = event.message.content
-        val messageLimit = 5
+        val messageLimit = 6
 
         // 检查并初始化每分钟群组消息限制
         if (groupId !in mapGroupFrequencyLimiter) {
@@ -268,7 +268,7 @@ class MocaGroupMessage(
                         .toInt()
                     if (toSetParameter < 10) {
                         subj.sendMessage(buildMessageChain {
-                            +PlainText("图片cd最低为5秒，请重新发送.")
+                            +PlainText("图片cd最低为10秒，请重新发送.")
                         })
                         return true
                     }
@@ -864,32 +864,72 @@ class MocaGroupMessage(
                 return true
             }
             "签到" -> {
-                val signInResult = moca.userSignIn(senderId)
-                val signInTime = signInResult[1] as Long
+                val signIn = moca.userSignIn(senderId)
+                val signInHour = signIn.signInTime.toDateStr("HH").toInt()
+                val cityId = mocaDB.getUserConfig(senderId, "loc_id").toString()
+                var weatherText = ""
+                if(moca.groupConfigEnabled(event.group.id, "exp") && cityId != "") {
+                    val location = mocaDB.getUserConfig(senderId, "loc_name")
+                    weatherText = when{
+                            (signInHour in 0..17) -> {
+                                val wData = weatherLookup(cityId)
+                                "今天${location}${wData.textDay}，温度${wData.tempMin}℃ ~ ${wData.tempMax}℃，" +
+                                        "总降雨量为${wData.precipDay}mm"
+                            } else -> {
+                                val wData = weatherLookup(cityId, 2)
+                                println(wData.fxDate)
+                                "明天${location}${wData.textDay}，温度${wData.tempMin}℃ ~ ${wData.tempMax}℃，" +
+                                        "总降雨量为${wData.precipDay}mm"
+                            }
+                        }
+                }
+                val greetWord: String = when(signInHour){
+                    in (0..3) -> {
+                        "夜深了..."
+                    }
+                    in (4..6) -> {
+                         "清晨了~"
+                    }
+                    in (7..10) -> {
+                        "上午好"
+                    }
+                    in (11..13) -> {
+                        "中午好"
+                    }
+                    in (13..16) -> {
+                        "下午好"
+                    }
+                    in (17..18) -> {
+                        "傍晚好"
+                    }
+                    else -> {
+                        "晚上好"
+                    }
+                }
                 subj.sendMessage(
-                    when (signInResult[0]) {
+                    when (signIn.signInCode) {
                         -1 -> {
                             buildMessageChain {
                                 +At(senderId)
-                                +PlainText("\n你已经在今天的 ${signInTime.toDateStr("HH:mm:ss")} 签过到了哦~")
+                                +PlainText("\n你已经在今天的 ${signIn.signInTime.toDateStr("HH:mm:ss")} 签过到了哦~")
                                 +PlainText("\n一天只能签到一次哦，明天再来吧~")
                             }
                         }
                         0 -> {
                             buildMessageChain {
                                 +At(senderId)
-                                +PlainText("\n${signInTime.toDateStr()}签到成功！")
-                                +PlainText("\n你已经累计签到了${signInResult[2]}天啦~")
-                                +PlainText("\n摩卡给你5个面包哦~你现在有${signInResult[3]}个面包啦~")
+                                +PlainText(" ${greetWord}\n${signIn.signInTime.toDateStr()} 签到成功！")
+                                +PlainText("\n累计签到${signIn.sumSignInDays}天，你现在有${signIn.newPanNumber}个面包啦~\n")
+                                +PlainText(weatherText)
                             }
                         }
                         1 -> {
                             buildMessageChain {
                                 +At(senderId)
-                                +PlainText("\n${signInTime.toDateStr()} 签到成功~")
+                                +PlainText(" ${greetWord}\n${signIn.signInTime.toDateStr()} 签到成功~")
                                 +PlainText("\n初次签到，摩卡给你5个面包哦~")
                                 +PlainText("\n以后每天都可以签一次到哦~有空的话每天都来签到吧~")
-                                +PlainText("\n你现在有${signInResult[3]}个面包啦~")
+                                +PlainText("\n你现在有${signIn.newPanNumber}个面包啦~")
                             }
                         }
                         else -> {
@@ -902,7 +942,7 @@ class MocaGroupMessage(
             "抽签" -> {
                 val drawResult = moca.userDraw(senderId, groupId)
                 subj.sendMessage(
-                    when (drawResult[0]) {
+                    when (drawResult.drawCode) {
                         -2 -> {
                             buildMessageChain {
                                 +At(senderId)
@@ -910,31 +950,28 @@ class MocaGroupMessage(
                             }
                         }
                         -1 -> {
-                            val lastDrawTime = drawResult[1] as Long
+                            val lastDrawTime = drawResult.drawTime
                             buildMessageChain {
                                 +At(senderId)
                                 +PlainText(
                                     "\n你已经在今天的 ${lastDrawTime.toDateStr("HH:mm:ss")}抽过签啦~，" +
                                             "\n一天只能抽一次签哦~明天再来吧~" +
-                                            "\n今日运势：${drawResult[2]}" +
-                                            "\n今日幸运数字：${drawResult[3]}"
+                                            "\n今日运势：${drawResult.luckString}" +
+                                            "\n今日幸运数字：${drawResult.luckyNumber}"
                                 )
                             }
                         }
                         0 -> {
-                            val drawTime = drawResult[1] as Long
-                            val lpImagePath = drawResult[4] as String
-
                             val toSendMessage = mutableListOf(
                                 At(senderId),
                                 PlainText(
-                                    "\n${drawTime.toDateStr()} 抽签成功！" +
-                                            "\n今日运势：${drawResult[2]}" +
-                                            "\n今日幸运数字：${drawResult[3]}"
+                                    "\n${drawResult.drawTime.toDateStr()} 抽签成功！" +
+                                            "\n今日运势：${drawResult.luckString}" +
+                                            "\n今日幸运数字：${drawResult.luckyNumber}"
                                 )
                             )
-                            if (lpImagePath != "") {
-                                toSendMessage += subj.uploadImage(File(lpImagePath))
+                            if (drawResult.pictureFile != "") {
+                                toSendMessage += subj.uploadImage(File(drawResult.pictureFile))
                             }
                             mocaLogger.debug(toSendMessage.toString())
                             toSendMessage.toMessageChain()

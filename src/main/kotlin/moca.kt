@@ -240,12 +240,12 @@ class Moca {
         val currentTimestamp = System.currentTimeMillis() / 1000
         val cdString = "${id}_${cdType}"
         if (cdLength != 0) {
-            val finalCdLength = if (cdLength > 10) cdLength else 10
+            val finalCdLength = if (cdLength > 8) cdLength else 8
             mapMocaCd[cdString] = currentTimestamp + finalCdLength.toLong()
             mocaLogger.debug("$id: $cdType set to ${currentTimestamp + finalCdLength}")
         } else {
             val configCdLength = getGroupConfig(id, cdType).toString().toInt()
-            val finalCdLength = if (configCdLength > 10) configCdLength else 10
+            val finalCdLength = if (configCdLength > 8) configCdLength else 8
             mapMocaCd[cdString] = currentTimestamp + finalCdLength.toLong()
             mocaLogger.debug("$id: $cdType +$finalCdLength")
         }
@@ -513,14 +513,21 @@ class Moca {
      *
      * @return arrayListOf(状态, 上次签到时间/签到时间, 合计签到天数, 用户面包数)
      */
-    fun userSignIn(userId: Long): MutableList<Any> {
+    fun userSignIn(userId: Long): SignInResult {
         val tempLastSignInTime = mocaDB.getUserConfig(userId, "signin_time").toString()
         var lastSignInTime = 0L
         if (!tempLastSignInTime.isNotFound()) {
             lastSignInTime = tempLastSignInTime.toLong()
         }
         if (lastSignInTime > getTimestampStartOfToday() && lastSignInTime < getTimestampEndOfToday()) {
-            return arrayListOf(-1, lastSignInTime, 0, 0)
+            val returnResult = SignInResult()
+            returnResult.let {
+                it.signInCode = -1
+                it.signInTime = lastSignInTime
+                it.sumSignInDays = 0
+                it.newPanNumber = 0
+            }
+            return returnResult
         }
 
         val tempUserPan = mocaDB.getUserConfig(userId, "pan").toString()
@@ -543,7 +550,14 @@ class Moca {
             val panResult = panNumberModify(userId, 5)
             mocaLog("UserSignIn", targetId = userId,
                 description = "firstTime = True, sumSignInDay = $sumSignInDay, userOwnPan = $userOwnPan")
-            arrayListOf(1, signInTime, sumSignInDay, panResult.second)
+            val returnResult = SignInResult()
+            returnResult.let {
+                it.signInCode = 1
+                it.signInTime = signInTime
+                it.sumSignInDays = sumSignInDay
+                it.newPanNumber = panResult.second
+            }
+            returnResult
         } else {
             sumSignInDay += 1
             mocaDB.setConfig(userId, "USER", "signin_time", signInTime)
@@ -551,33 +565,51 @@ class Moca {
             val panResult = panNumberModify(userId, 5)
             mocaLog("UserSignIn", targetId = userId,
                 description = "firstTime = False, sumSignInDay = $sumSignInDay, userOwnPan = $userOwnPan")
-            arrayListOf(0, signInTime, sumSignInDay, panResult.second)
+            val returnResult = SignInResult()
+            returnResult.let {
+                it.signInCode = 0
+                it.signInTime = signInTime
+                it.sumSignInDays = sumSignInDay
+                it.newPanNumber = panResult.second
+            }
+            returnResult
         }
-
     }
 
     /**
-     * 签到.
+     * 抽签.
      *
      * @param userId 用户QQ号
      * @param groupId 群号
      *
      * @return arrayListOf(状态, 抽签时间/上次抽签时间, 今日运势, 今日幸运数字, lpImagePath)
      */
-    fun userDraw(userId: Long, groupId: Long): MutableList<Any> {
+    fun userDraw(userId: Long, groupId: Long): DrawResult {
         val tempDrawTime = mocaDB.getUserConfig(userId, "draw_time").toString()
         val lastDrawTime: Long
         if (!tempDrawTime.isNotFound()) {
             lastDrawTime = tempDrawTime.toLong()
             if (lastDrawTime > getTimestampStartOfToday() && lastDrawTime < getTimestampEndOfToday()) {
                 val todayDrawStatus = mocaDB.getUserConfig(userId, "today_draw_status").toString()
-                val todayLuckyNumber = mocaDB.getUserConfig(userId, "today_lucky_num").toString()
-                return arrayListOf(-1, lastDrawTime, todayDrawStatus, todayLuckyNumber, "")
+                val todayLuckyNumber = mocaDB.getUserConfig(userId, "today_lucky_num").toString().toInt()
+                val returnData = DrawResult()
+                returnData.let {
+                    it.drawCode = -1
+                    it.drawTime = lastDrawTime
+                    it.luckString = todayDrawStatus
+                    it.luckyNumber = todayLuckyNumber
+                }
+                return returnData
             }
         }
         val usePanResult = panNumberModify(userId, -2)
         if (!usePanResult.first) {
-            return arrayListOf(-2, 0, "", "", "")
+            val returnData = DrawResult()
+            returnData.let {
+                it.drawCode = -2
+                it.drawTime = 0
+            }
+            return returnData
         }
         val drawTime = System.currentTimeMillis() / 1000
         val luckyNumber = (1..10).random()
@@ -601,7 +633,15 @@ class Moca {
         mocaDB.setConfig(userId, "USER", "today_lucky_num", luckyNumber)
         mocaLog("UserDraw", groupId = groupId, targetId = userId,
             description = "luck = {$luckString}, luck_num = {$luckyNumber} lp = {$pictureFile}")
-        return arrayListOf(0, drawTime, luckString, luckyNumber, pictureFile)
+        val returnData = DrawResult()
+        returnData.let {
+            it.drawCode = -1
+            it.drawTime = drawTime
+            it.luckString = luckString
+            it.luckyNumber = luckyNumber
+            it.pictureFile = pictureFile
+        }
+        return returnData
     }
 
     fun keywordEdit(groupId: Long, paras: List<String>, operation: String = "ADD"): MessageChain {

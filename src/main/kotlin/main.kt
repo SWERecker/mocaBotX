@@ -55,7 +55,7 @@ object MocaWithConfig {
         }
 
         bot.eventChannel.subscribeAlways<MemberLeaveEvent> {
-            mocaLogger.info("${group.id}: Member left")
+            mocaLogger.debug("${group.id}: Member left")
             if (moca.isSuperman(member.id)) {
                 group.sendMessage("开发者${member.id}被移除，自动退出群组...")
                 mocaLogger.warn("${group.id}: Superman left")
@@ -67,16 +67,14 @@ object MocaWithConfig {
 
         bot.eventChannel.subscribeAlways<MemberJoinEvent> {
             mocaLogger.debug("${group.id}: New member.")
-            moca.getGroupConfig(group.id, "welcomeNewMemberJoin").also {
-                if (it.toString().toInt() == 1) {
-                    val toSendMessage = buildMessageChain {
+            if(moca.groupConfigEnabled(group.id, "welcomeNewMemberJoin")) {
+                group.sendMessage(
+                    buildMessageChain {
                         +At(member)
                         +PlainText(" 欢迎加入 ${group.name}！")
                     }
-                    group.sendMessage(toSendMessage)
-                }
+                )
             }
-
         }
 
         bot.eventChannel.subscribeAlways<BotInvitedJoinGroupRequestEvent> {

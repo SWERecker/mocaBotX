@@ -230,3 +230,54 @@ fun jsonStringToMap(sourceJson: String): Map<String?, Any?> {
     val gson = Gson()
     return gson.fromJson(sourceJson, object: TypeToken<Map<String?, Any?>?>() {}.type)
 }
+
+class SignInResult {
+    /**
+     * 签到状态
+     */
+    var signInCode = 0
+
+    /**
+     * 签到时间
+     */
+    var signInTime = 0L
+
+    /**
+     * 累计签到天数
+     */
+    var sumSignInDays = 0
+
+    /**
+     * 签到后的面包数量
+     */
+    var newPanNumber = 0
+
+}
+
+class DrawResult {
+    /**
+     * 抽签状态码
+     */
+    var drawCode = 0
+
+    /**
+     * 抽签时间
+     */
+    var drawTime = 0L
+
+    /**
+     * 抽签内容
+     */
+    var luckString = ""
+
+    /**
+     * 幸运数字
+     */
+    var luckyNumber = 0
+
+    /**
+     * 附赠的lp图片路径
+     */
+    var pictureFile = ""
+
+}

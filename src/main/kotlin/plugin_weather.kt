@@ -68,7 +68,7 @@ fun cityLookup(paraList: List<String>): MutableMap<String, String>{
 /**
  * 返回天气
  */
-fun weatherLookup(cityId: String): WeatherData {
+fun weatherLookup(cityId: String, whichDayIn3Days: Int = 1): WeatherData {
     val wData = WeatherData()
 
     if (cityId == "") { wData.code = "400" ;return wData }
@@ -88,17 +88,22 @@ fun weatherLookup(cityId: String): WeatherData {
         wData.code = jsonMap["code"].toString()
         if (jsonMap["code"].toString() == "200") {
             val weather3D = jsonMap["daily"] as List<*>
-            val todayWeather = weather3D.first() as Map<*, *>
-            wData.fxDate = todayWeather["fxDate"].toString()
-            wData.tempMin = todayWeather["tempMin"].toString()
-            wData.tempMax = todayWeather["tempMax"].toString()
-            wData.humidity = todayWeather["humidity"].toString()
-            wData.textDay = todayWeather["textDay"].toString()
-            wData.textNight = todayWeather["textNight"].toString()
-            wData.windDirDay = todayWeather["windDirDay"].toString()
-            wData.windDirNight = todayWeather["windDirNight"].toString()
-            wData.windScaleDay = todayWeather["windScaleDay"].toString()
-            wData.windScaleNight = todayWeather["windScaleNight"].toString()
+            val dayIndex = whichDayIn3Days - 1
+            val dayWeather = weather3D[dayIndex] as Map<*, *>
+            wData.fxDate = dayWeather["fxDate"].toString()
+
+            wData.tempMin = dayWeather["tempMin"].toString()
+            wData.tempMax = dayWeather["tempMax"].toString()
+            wData.humidity = dayWeather["humidity"].toString()
+            wData.precipDay = dayWeather["precip"].toString()
+
+            wData.textDay = dayWeather["textDay"].toString()
+            wData.textNight = dayWeather["textNight"].toString()
+
+            wData.windDirDay = dayWeather["windDirDay"].toString()
+            wData.windDirNight = dayWeather["windDirNight"].toString()
+            wData.windScaleDay = dayWeather["windScaleDay"].toString()
+            wData.windScaleNight = dayWeather["windScaleNight"].toString()
         }
     }
     catch (e: IOException) {
@@ -134,25 +139,93 @@ fun weatherLookup(cityId: String): WeatherData {
 
 
 class WeatherData{
+    /**
+     * 响应状态码(200 OK)
+     */
     var code = ""
+
+    /**
+     * 预报日期
+     */
     var fxDate = ""
+
+    /**
+     * 数据观测时间
+     */
     var obsTime = ""
 
+    /**
+     * 温度，默认单位：摄氏度
+     */
     var tempNow = ""
+
+    /**
+     * 预报当天最低温度
+     */
     var tempMin = ""
+
+    /**
+     * 预报当天最高温度
+     */
     var tempMax = ""
+
+    /**
+     * 体感温度，默认单位：摄氏度
+     */
     var tempFeelsLike = ""
+
+    /**
+     * 相对湿度，百分比数值
+     */
     var humidity = ""
 
+    /**
+     * 天气状况的文字描述，包括阴晴雨雪等天气状态的描述
+     */
     var textNow = ""
+
+    /**
+     * 预报白天天气状况文字描述，包括阴晴雨雪等天气状态的描述
+     */
     var textDay = ""
+
+    /**
+     * 预报夜间天气状况文字描述，包括阴晴雨雪等天气状态的描述
+     */
     var textNight = ""
 
+    /**
+     * 预报白天风向
+     */
     var windDirDay = ""
+
+    /**
+     * 预报白天风力等级
+     */
     var windScaleDay = ""
+
+    /**
+     * 预报夜间当天风向
+     */
     var windDirNight = ""
+
+    /**
+     * 预报夜间风力等级
+     */
     var windScaleNight = ""
+
+    /**
+     * 风向
+     */
     var windDirNow = ""
+
+    /**
+     * 风力等级
+     */
     var windScaleNow = ""
 
+    /**
+     * 预报当天总降水量，默认单位：毫米
+     */
+    var precipDay = ""
 }
