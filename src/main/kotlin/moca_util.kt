@@ -1,5 +1,7 @@
 package me.swe.main
 
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import java.io.*
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -17,6 +19,10 @@ val protectedKeys = arrayListOf(
     "设置复读cd", "查看当前参数", "增加关键词",
     "添加关键词", "删除关键词"
 )
+
+val Slash: String = File.separator
+val mocaDB = MocaDatabase()
+val moca = Moca()
 
 /**
  * 字符串相似度计算
@@ -187,4 +193,40 @@ fun containProtectedKeys(str: String): Boolean {
         }
     }
     return flag
+}
+
+/**
+ * 读取config.txt中的参数
+ *
+ * 存储格式为
+ * X=Y
+ *
+ * @param arg X
+ *
+ * @return Y
+ */
+fun getBotConfig(arg: String): String {
+    val inStream: InputStream = File("config.txt").inputStream()
+    inStream.bufferedReader().useLines { lines ->
+        lines.forEach {
+            val line = it.split('=')
+            if (line[0] == arg) {
+                return line[1].replace("\\n", "\n")
+            }
+        }
+    }
+    mocaLogger.error("GetBotConfig: Arg $arg not found.")
+    return ""
+}
+
+/**
+ * 将Json转换为Map<String?, Any?>
+ *
+ *  @param sourceJson 来源JSON
+ *
+ *  @return Map<String?, Any?>
+ */
+fun jsonStringToMap(sourceJson: String): Map<String?, Any?> {
+    val gson = Gson()
+    return gson.fromJson(sourceJson, object: TypeToken<Map<String?, Any?>?>() {}.type)
 }

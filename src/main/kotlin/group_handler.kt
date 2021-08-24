@@ -2,32 +2,262 @@ package me.swe.main
 
 import net.mamoe.mirai.contact.Contact.Companion.sendImage
 import net.mamoe.mirai.contact.Contact.Companion.uploadImage
-import net.mamoe.mirai.contact.Group
 import net.mamoe.mirai.contact.getMember
+import net.mamoe.mirai.contact.isOperator
 import net.mamoe.mirai.contact.nameCardOrNick
 import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.message.code.MiraiCode.deserializeMiraiCode
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.ExternalResource.Companion.sendAsImageTo
 import net.mamoe.mirai.utils.ExternalResource.Companion.toExternalResource
-import net.mamoe.mirai.utils.MiraiLogger
 import java.io.File
 import java.lang.NumberFormatException
 
-class MocaGroupMessageHandler(
+class MocaGroupMessage(
     private val event: GroupMessageEvent,
-    private val subj: Group,
-    private val moca: Moca,
 ) {
-    private val logger = MiraiLogger.create("MocaGroupHandler")
-    private val messageContent = event.message.content
+    private val messageContent: String = event.message.content
     private val senderId = event.sender.id
     private val groupId = event.group.id
+    private val subj = event.subject
+    suspend fun messageHandler() {
+        val messageContent = event.message.content
+        val messageLimit = 5
+
+        // 检查并初始化每分钟群组消息限制
+        if (groupId !in mapGroupFrequencyLimiter) {
+            mapGroupFrequencyLimiter[groupId] = messageLimit
+            mocaLogger.debug("$groupId: Init GFL.  MessageLeft = $messageLimit")
+        }
+
+        // 每分钟重置消息限制
+        if ((System.currentTimeMillis() / 1000) - resetGroupFrequencyLimiterTime > 60) {
+            mocaLogger.debug("$groupId: Reset message limit")
+            mapGroupFrequencyLimiter.forEach {
+                mapGroupFrequencyLimiter[it.key] = messageLimit
+            }
+            resetGroupFrequencyLimiterTime = System.currentTimeMillis() / 1000
+        }
+
+        // Superman 操作
+        if (moca.isSuperman(senderId)) {
+            supermanOperations().also {
+                if (it) {
+                    return
+                }
+            }
+        }
+
+        // 若达到每分钟消息上限，停止响应群消息
+        if (moca.isReachedMessageLimit(groupId)) {
+            mocaLogger.debug("$groupId: Group message limit reached!!!")
+            return
+        }
+
+        // 提取At操作
+        val atMessage: At? = event.message.findIsInstance<At>()
+        if (atMessage != null) {
+            atOperations().also {
+                if (it) {
+                    return
+                }
+            }
+        }
+
+        // 管理员/群主操作
+        if (event.sender.permission.isOperator() || moca.isSuperman(senderId)) {
+            adminOperations().also {
+                if (it) {
+                    return
+                }
+            }
+        }
+
+        // 面包相关操作
+        if (moca.groupConfigEnabled(groupId, "pan")) {
+            if (moca.isInCd(groupId, "replyCD")) {
+                return
+            }
+            panOperations().also {
+                if (it) {
+                    moca.setCd(groupId, "replyCD")
+                    return
+                }
+            }
+        }
+
+        // 查询换lp次数
+        if (messageContent.replace("老婆", "lp")
+                .contains("换lp次数")
+        ) {
+            getSenderChangeLpTimes()
+            return
+        }
+
+        // 提交图片
+        if (messageContent.startsWith("提交图片")) {
+            val category = event.message.filterIsInstance<PlainText>()
+                .firstOrNull()
+                .toString()
+                .substring(4)
+                .replace("\n", "")
+            if (!event.message.contains(Image)) {
+                subj.sendMessage("错误，你至少需要包含一张图片")
+                return
+            }
+            subj.sendMessage(moca.submitPictures(groupId,
+                event.message.filterIsInstance<Image>(), category)
+            )
+            return
+        }
+
+        // 使用说明/青年大学习
+        if (!moca.isInCd(groupId, "replyCD")) {
+            when {
+                messageContent.contains("使用说明") -> {
+                    subj.sendMessage("使用说明：https://mocabot.cn/")
+                    moca.setCd(groupId, "replyCD")
+                    return
+                }
+                messageContent.contains("青年大学习") -> {
+                    subj.sendMessage(getBotConfig("QNDXX"))
+                    moca.setCd(groupId, "replyCD")
+                    return
+                }
+            }
+
+            // 摩卡爬/老婆
+            messageContent
+                .replace("摩卡", "moca")
+                .replace("爪巴", "爬")
+                .replace("老婆", "lp")
+                .lowercase()
+                .also {
+                    if (moca.isInCd(groupId, "keaiPaCD")) {
+                        return
+                    }
+                    if (it.contains("moca") && it.contains("爬")) {
+                        if (randomDo(50)) {
+                            mocaPaPath.listFiles()?.random()?.let { file -> subj.sendImage(file) }
+                            moca.setCd(groupId, "keaiPaCD")
+                        }
+
+                        return
+                    }
+                    if ((it.contains("moca") && it.contains("可爱")) ||
+                        (it.contains("moca") && it.contains("lp"))
+                    ) {
+                        if (randomDo(50)) {
+                            mocaKeaiPath.listFiles()?.random()?.let { file -> subj.sendImage(file) }
+                            moca.setCd(groupId, "keaiPaCD")
+                        }
+                        return
+                    }
+                }
+
+            // 设置老婆
+            val preProcessedContent = messageContent
+                .replace("我", "w")
+                .replace("老婆", "lp")
+                .replace("事", "是")
+            if (preProcessedContent.startsWith("wlp是")) {
+                val setLpResult = moca.setUserLp(groupId, senderId, preProcessedContent)
+                subj.sendMessage(setLpResult)
+                return
+            }
+
+            // 来点老婆
+            if (messageContent.contains("来点") &&
+                messageContent
+                    .lowercase()
+                    .replace("老婆", "lp")
+                    .contains("lp")
+            ) {
+                val lpName = moca.getUserLp(senderId)
+                if (lpName !in moca.getGroupKeyword(groupId).keys) {
+                    subj.sendMessage("az，您还没有设置lp或者这个群没有找到nlp呢...")
+                    return
+                }
+                val doubleLp =
+                    messageContent.startsWith("多") && moca.groupConfigEnabled(groupId, "pan")
+                val imageParameter = Pair(lpName, doubleLp)
+                sendPicture(imageParameter)
+                moca.setCd(groupId, "replyCD")
+                return
+            }
+
+            // “!”消息处理器
+            if (messageContent.startsWith("!") || messageContent.startsWith("！")
+            ) {
+                exclamationMarkProcessor().also {
+                    if (it) {
+                        moca.setCd(groupId, "replyCD")
+                        return
+                    }
+                }
+            }
+
+            // 查看群图片
+            if (messageContent.startsWith("查看群图片")) {
+                val tempId = event.message.filterIsInstance<PlainText>()
+                    .firstOrNull()
+                    .toString()
+                    .substring(5)
+                    .replace("\n", "")
+                val picId = try {
+                    tempId.toInt()
+                }catch (e: NumberFormatException) {
+                    subj.sendMessage("错误：ID有误")
+                    return
+                }
+                if (picId < 1 || picId > 999) {
+                    subj.sendMessage("错误：ID范围：1~999")
+                    return
+                }
+                sendGroupPicture(picId)
+                moca.setCd(groupId, "replyCD")
+                return
+            }
+
+            // 匹配群图片关键词(GroupPicture)
+            moca.matchGroupPicKey(groupId, messageContent).also {
+                if (it) {
+                    sendGroupPicture()
+                    moca.setCd(groupId, "replyCD")
+                    return
+                }
+            }
+
+            // 匹配群关键词
+            val matchResult = moca.matchKey(groupId, messageContent)
+            if (matchResult.first != "") {
+                sendPicture(matchResult)
+                moca.setCd(groupId, "replyCD")
+                return
+            }
+        }
+
+        groupRepeatSaver().also { toRepeat ->
+            if (toRepeat) {
+                if (!moca.isInCd(groupId, "repeatCD")) {
+                    randomDo(
+                        moca.getGroupConfig(groupId, "repeatChance")
+                            .toString().toInt()
+                    ).also { random ->
+                        if (random) {
+                            sendRepeatContent()
+                            moca.setCd(groupId, "repeatCD")
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * 管理员操作
      */
-    suspend fun adminOperations(): Boolean {
+    private suspend fun adminOperations(): Boolean {
         when {
             messageContent.startsWith("设置图片cd") -> {
                 try {
@@ -36,7 +266,7 @@ class MocaGroupMessageHandler(
                         .trimEnd('秒')
                         .trimEnd('s')
                         .toInt()
-                    if (toSetParameter < 5) {
+                    if (toSetParameter < 10) {
                         subj.sendMessage(buildMessageChain {
                             +PlainText("图片cd最低为5秒，请重新发送.")
                         })
@@ -265,12 +495,12 @@ class MocaGroupMessageHandler(
     /**
      * 超级管理员操作
      */
-    suspend fun supermanOperations(): Boolean {
+    private suspend fun supermanOperations(): Boolean {
         when (messageContent) {
             "RELOAD_REDIS" -> {
                 val reloadResult = loadIndexFile()
-                val resultMessage = "Reload redis database, current people count=$reloadResult"
-                logger.info(resultMessage)
+                val resultMessage = "Superman: Reload redis, current count=$reloadResult"
+                mocaLogger.debug(resultMessage)
                 subj.sendMessage(resultMessage)
                 return true
             }
@@ -286,7 +516,7 @@ class MocaGroupMessageHandler(
     /**
      * 获取换lp次数.
      */
-    suspend fun getSenderChangeLpTimes(): Boolean {
+    private suspend fun getSenderChangeLpTimes(): Boolean {
         val changeLpTimes = moca.getChangeLpTimes(senderId)
         subj.sendMessage(
             if (changeLpTimes <= 0) {
@@ -308,7 +538,7 @@ class MocaGroupMessageHandler(
      *
      *
      */
-    suspend fun sendPicture(imageParameter: Pair<String, Boolean>): Boolean {
+    private suspend fun sendPicture(imageParameter: Pair<String, Boolean>): Boolean {
         var panResult = ""
         var pictureCount = 1
         if (imageParameter.second) {
@@ -328,7 +558,7 @@ class MocaGroupMessageHandler(
         for (filePath in pictureFiles) {
             toSendMessage += subj.uploadImage(File(filePath))
         }
-        logger.info(toSendMessage.toString())
+        mocaLogger.debug(toSendMessage.toString())
         moca.updateCount(groupId, imageParameter.first)
         subj.sendMessage(toSendMessage.toMessageChain())
         return true
@@ -337,7 +567,7 @@ class MocaGroupMessageHandler(
     /**
      * 包含At的操作
      */
-    suspend fun atOperations(): Boolean {
+    private suspend fun atOperations(): Boolean {
         val atTarget = event.message.findIsInstance<At>()?.target
         val atTargetName = atTarget?.let { subj.getMember(it)?.nameCardOrNick }
         val messageContent = messageContent
@@ -366,7 +596,7 @@ class MocaGroupMessageHandler(
                 .replace("摩卡", "moca")
                 .replace("爪巴", "爬")
                 .replace("老婆", "lp")
-                .toLowerCase()
+                .lowercase()
                 .also {
                     if (it.contains("爬")) {
                         if (randomDo(50)) {
@@ -416,7 +646,7 @@ class MocaGroupMessageHandler(
         if (!voiceFiles.isNullOrEmpty()) {
             val voiceFile = File(voiceFiles.random().absolutePath).toExternalResource()
             voiceFile.use {
-                subj.uploadVoice(voiceFile).sendTo(event.group)
+                subj.uploadAudio(voiceFile).sendTo(event.group)
 //                return buildMessageChain {
 //                    +uploadVoice
 //                }
@@ -429,12 +659,12 @@ class MocaGroupMessageHandler(
     /**
      * !指令处理器
      */
-    suspend fun exclamationMarkProcessor(): Boolean {
+    private suspend fun exclamationMarkProcessor(): Boolean {
         val paraList = messageContent
             .replaceFirst("！", "!")
             .trimStart('!')
             .split(' ')
-        if (paraList.isNullOrEmpty()) {
+        if (paraList.isEmpty()) {
             return false
         }
         when (paraList[0]) {
@@ -510,11 +740,64 @@ class MocaGroupMessageHandler(
                 }
                 return true
             }
+            "bl" -> {
+                paraList.drop(1).also {
+                    subj.sendMessage(userBindCity(senderId, it))
+                }
+                return true
+            }
+            "wetdy" -> {
+                var cityId = ""
+                var cityName = ""
+                var cityAdm = ""
+                var cityCountry = ""
+                when(paraList.size) {
+                    1 -> {
+                        cityId = mocaDB.getUserConfig(senderId, "loc_id").toString()
+                        if (cityId == "") {
+                            subj.sendMessage("错误：尚未绑定城市，请使用【!bl 城市 [省](可选)】进行绑定.")
+                            return true
+                        }
+                        cityName = mocaDB.getUserConfig(senderId, "loc_name").toString()
+                        cityAdm = mocaDB.getUserConfig(senderId, "loc_adm").toString()
+                        cityCountry = mocaDB.getUserConfig(senderId, "loc_con").toString()
+                    }
+                    2, 3 -> {
+                        paraList.drop(1).also {
+                            val cityData = cityLookup(it)
+                            cityId = cityData["id"].toString()
+                            cityName = cityData["name"].toString()
+                            cityAdm = cityData["adm1"].toString()
+                            cityCountry = cityData["country"].toString()
+                        }
+                    }
+                    else -> {
+                        subj.sendMessage("错误：参数数量有误.")
+                    }
+                }
+                val wData = weatherLookup(cityId)
+                if (wData.code != "200") {
+                    subj.sendMessage("错误：查询的城市有误，请检查.")
+                    return true
+                }
+                subj.sendMessage(
+                    buildMessageChain {
+                        +At(senderId)
+                        +PlainText("\n${wData.fxDate} $cityName, $cityAdm, ${cityCountry}的天气\n")
+                        +PlainText("当前${wData.textNow}，温度${wData.tempNow}℃，体感温度${wData.tempFeelsLike}℃。\n")
+                        +PlainText("今日温度${wData.tempMin}℃ ~ ${wData.tempMax}℃。\n")
+                        +PlainText("今日白天${wData.textDay}，${wData.windDirDay}${wData.windScaleDay}级，" +
+                                "夜晚${wData.textNight}，${wData.windDirNight}${wData.windScaleNight}级，" +
+                                "湿度${wData.humidity}%。\n")
+                    }
+                )
+                return true
+            }
         }
         return false
     }
 
-    suspend fun panOperations(): Boolean {
+    private suspend fun panOperations(): Boolean {
         when (messageContent) {
             "我的面包" -> {
                 subj.sendMessage(
@@ -653,7 +936,7 @@ class MocaGroupMessageHandler(
                             if (lpImagePath != "") {
                                 toSendMessage += subj.uploadImage(File(lpImagePath))
                             }
-                            logger.info(toSendMessage.toString())
+                            mocaLogger.debug(toSendMessage.toString())
                             toSendMessage.toMessageChain()
                         }
                         else -> {
@@ -672,7 +955,7 @@ class MocaGroupMessageHandler(
      *
      * @return 是否需要复读
      */
-    fun groupRepeatSaver(): Boolean {
+    private fun groupRepeatSaver(): Boolean {
         // mutableMapOf<Long, MutableMap<Int, String>>()
         if (mapGroupRepeater[groupId].isNullOrEmpty()) {
             mapGroupRepeater[groupId] = mutableMapOf()
@@ -709,7 +992,7 @@ class MocaGroupMessageHandler(
     /**
      * 发送复读内容.
      */
-    suspend fun sendRepeatContent() {
+    private suspend fun sendRepeatContent() {
         val toSendMessage = mapGroupRepeater[groupId]?.get(1).toString().deserializeMiraiCode()
         subj.sendMessage(toSendMessage)
         mapGroupRepeater[groupId]?.set(3, event.message.serializeToMiraiCode())
@@ -718,7 +1001,7 @@ class MocaGroupMessageHandler(
     /**
      * 发送群图片.
      */
-    suspend fun sendGroupPicture(picId: Int = -1) {
+    private suspend fun sendGroupPicture(picId: Int = -1) {
         if (picId == -1) {
             val groupPicFolder = File("resource" + File.separator + "group_pic" + File.separator + groupId.toString())
             val groupPics = groupPicFolder.listFiles()
@@ -729,7 +1012,7 @@ class MocaGroupMessageHandler(
             }
         } else {
             val toSendPic = moca.getGroupPicById(groupId, picId)
-            if (!toSendPic.isNullOrEmpty()) {
+            if (!toSendPic.isEmpty()) {
                 File("resource" + File.separator + "group_pic" + File.separator +
                         groupId.toString() + File.separator + toSendPic["name"])
                     .sendAsImageTo(event.group)

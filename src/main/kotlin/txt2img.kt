@@ -21,9 +21,9 @@ object MultiLineTextToImage {
         }
         var img = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
         var g2d = img.createGraphics()
-        val toUseFont = Font.createFont(Font.TRUETYPE_FONT, File("resource" + File.separator + "PingFang.ttf"))
+        val toUseFont = Font.createFont(Font.TRUETYPE_FONT, File("resource" + Slash + "PingFang.ttf"))
         val fontSized = toUseFont.deriveFont(16f)
-        val titleFont = Font.createFont(Font.TRUETYPE_FONT, File("resource" + File.separator + "PingFang.ttf"))
+        val titleFont = Font.createFont(Font.TRUETYPE_FONT, File("resource" + Slash + "PingFang.ttf"))
         val titleSized  = titleFont.deriveFont(24f)
         g2d.dispose()
         val inputStringArray = inputString.split("\n")
@@ -41,7 +41,7 @@ object MultiLineTextToImage {
         img = BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_ARGB)
         g2d = img.createGraphics()
 
-        val bgImage: Image = ImageIO.read(File("resource" + File.separator + "bg.png"))
+        val bgImage: Image = ImageIO.read(File("resource" + Slash + "bg.png"))
         val bgImageHeight = bgImage.getHeight(null)
         val bgImageWidth = bgImage.getWidth(null)
         var bgImageDrawPosX = 0
@@ -82,7 +82,7 @@ object MultiLineTextToImage {
         }
         g2d.dispose()
         try {
-            val saveImage = File("cache" + File.separator + toSaveFileName)
+            val saveImage = File("cache" + Slash + toSaveFileName)
             ImageIO.write(img, "png", saveImage)
             // println(saveImage.absolutePath)
             return saveImage.absolutePath

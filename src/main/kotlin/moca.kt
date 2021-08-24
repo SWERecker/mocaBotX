@@ -3,19 +3,14 @@ package me.swe.main
 
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.message.data.Image.Key.queryUrl
-import net.mamoe.mirai.utils.MiraiLogger
 import org.bson.Document
 import java.io.File
-import java.io.InputStream
 
 var picturePath: String = ""
-val mocaPaPath = File("resource" + File.separator + "pa" + File.separator)
-val mocaKeaiPath = File("resource" + File.separator + "keai" + File.separator)
+val mocaPaPath = File("resource" + Slash + "pa" + Slash)
+val mocaKeaiPath = File("resource" + Slash + "keai" + Slash)
 
 class Moca {
-    private val mocaLogger = MiraiLogger.create("MocaLogger")
-    private val mocaDB = MocaDatabase()
-
     /**
      * 初始化，从数据库中加载所有群组的关键词列表至内存.
      */
@@ -24,29 +19,6 @@ class Moca {
         mocaDB.loadAllGroupConfig()
     }
 
-    /**
-     * 读取config.txt中的参数
-     *
-     * 存储格式为
-     * X=Y
-     *
-     * @param arg X
-     *
-     * @return Y
-     */
-    fun getBotConfig(arg: String): String {
-        val inStream: InputStream = File("config.txt").inputStream()
-        inStream.bufferedReader().useLines { lines ->
-            lines.forEach {
-                val line = it.split('=')
-                if (line[0] == arg) {
-                    return line[1].replace("\\n", "\n")
-                }
-            }
-        }
-        mocaLogger.error("Arg $arg not found.")
-        return ""
-    }
 
     /**
      * 从缓存中获取某群组的关键词列表.
@@ -76,11 +48,23 @@ class Moca {
         var name = ""
         var isDouble = false
         val groupKeyword = getGroupKeyword(groupId)
+
         for ((k, v) in groupKeyword) {
             if (v != "") {
-                if (Regex(v).find(key.toLowerCase()) != null) {
+                if (Regex(v).matches(key.lowercase())) {
                     name = k
                     break
+                }
+            }
+        }
+
+        if (name == "") {
+            for ((k, v) in groupKeyword) {
+                if (v != "") {
+                    if (Regex(v).find(key.lowercase()) != null) {
+                        name = k
+                        break
+                    }
                 }
             }
         }
@@ -181,7 +165,7 @@ class Moca {
             }
         } else {
             val matchResult = matchLp(toSetLpName, groupKeyword)
-            if (matchResult.isNullOrEmpty()) {
+            if (matchResult.isEmpty()) {
                 buildMessageChain {
                     +At(userId)
                     +PlainText("\n没有在此群找到您要设置的lp哦~\n")
@@ -258,12 +242,12 @@ class Moca {
         if (cdLength != 0) {
             val finalCdLength = if (cdLength > 10) cdLength else 10
             mapMocaCd[cdString] = currentTimestamp + finalCdLength.toLong()
-            mocaLogger.info("$cdString set to ${currentTimestamp + finalCdLength}")
+            mocaLogger.debug("$id: $cdType set to ${currentTimestamp + finalCdLength}")
         } else {
             val configCdLength = getGroupConfig(id, cdType).toString().toInt()
             val finalCdLength = if (configCdLength > 10) configCdLength else 10
             mapMocaCd[cdString] = currentTimestamp + finalCdLength.toLong()
-            mocaLogger.info("$cdString +$finalCdLength")
+            mocaLogger.debug("$id: $cdType +$finalCdLength")
         }
     }
 
@@ -307,7 +291,7 @@ class Moca {
      *
      * @param userId 用户QQ号.
      *
-     * @return 未设置："NOT_SET"; 正常返回设置的lp名称
+     * @return 未设置：NOT_SET 正常返回设置的lp名称
      */
     fun getUserLp(userId: Long): String {
         val userLp = mocaDB.getUserConfig(userId, "lp") as String
@@ -458,7 +442,7 @@ class Moca {
             Pair(true, getUserPan(userId))
         } else {
             if (-delta > userPan) {
-                mocaLogger.info("User $userId Pan not enough($userPan < ${-delta})")
+                mocaLogger.warn("$userId: Pan not enough($userPan < ${-delta})")
                 Pair(false, userPan)
             } else {
                 setUserPan(userId, userPan + delta)
@@ -551,9 +535,7 @@ class Moca {
             sumSignInDay = tempSumDay.toInt()
         }
         userOwnPan += 5
-        // println("lastSignInTime = $lastSignInTime")
-        // println("userOwnPan += 5, = $userOwnPan")
-        // println("sumSignInDay = $sumSignInDay")
+
         return if (tempLastSignInTime.isNotFound()) {
             sumSignInDay += 1
             mocaDB.setConfig(userId, "USER", "signin_time", signInTime)
@@ -633,7 +615,7 @@ class Moca {
         if (keysList != null) {
             when (operation) {
                 "ADD" -> {
-                    return if (existKeys?.let { Regex(it).find(key.toLowerCase()) } != null) {
+                    return if (existKeys?.let { Regex(it).find(key.lowercase()) } != null) {
                         PlainText("错误：“${name}”中已存在能够识别“${key}”的关键词").toMessageChain()
                     } else {
                         keysList.add(key)
@@ -676,7 +658,7 @@ class Moca {
         } else {
             "${groupId}/${category}"
         }
-        val downloadPath = "cache" + File.separator + "upload" + File.separator + imageCategory + File.separator
+        val downloadPath = "cache" + Slash + "upload" + Slash + imageCategory + Slash
         images.forEach { image ->
             val imageId = image.imageId
             val imageUrl = image.queryUrl()
@@ -708,7 +690,7 @@ class Moca {
      * @return 提交结果
      */
     suspend fun submitGroupPictures(groupId: Long, images: List<Image>, pic_id: Int): MessageChain {
-        val downloadPath = "resource" + File.separator + "group_pic" + File.separator + groupId.toString() + File.separator
+        val downloadPath = "resource" + Slash + "group_pic" + Slash + groupId.toString() + Slash
         var dbPicId = pic_id
         if (pic_id == -1) {
             dbPicId = mocaDB.getCurrentPicCount(groupId) + 1
@@ -732,9 +714,9 @@ class Moca {
 
     fun deleteGroupPicById(groupId: Long, picId: Int): String {
         val currentPic = getGroupPicById(groupId, picId)
-        if (!currentPic.isNullOrEmpty()) {
-            val picFile = File("resource" + File.separator + "group_pic" +
-                    File.separator + groupId.toString() + File.separator + currentPic["name"])
+        if (!currentPic.isEmpty()) {
+            val picFile = File("resource" + Slash + "group_pic" +
+                    Slash + groupId.toString() + Slash + currentPic["name"])
             return try {
                 if (picFile.exists()) {
                     picFile.delete()
@@ -742,12 +724,12 @@ class Moca {
                 val existDocument = mocaDB.getCurrentPics(groupId)
                 existDocument.remove(picId.toString())
                 mocaDB.saveGroupPicture(groupId, existDocument)
-                mocaLogger.info("[${groupId}] Delete group pic ID = $picId")
+                mocaLogger.debug("$groupId: Delete group pic ID = $picId")
                 mocaLog("GroupDeletePic", groupId = groupId,
                     description = "ID = $picId, picFile = $picFile")
                 "成功删除了图片ID=$picId."
             } catch (e: Exception) {
-                mocaLogger.error("[${groupId}] Delete file $picFile failed")
+                mocaLogger.error("$groupId: Delete file $picFile failed")
                 "发生了一些错误."
             }
         } else {
@@ -760,7 +742,7 @@ class Moca {
     fun matchGroupPicKey(groupId: Long, messageContent: String): Boolean {
         val groupPicKeys = mocaDB.getGroupPicKeywords(groupId)
         if (groupPicKeys == "") { return false }
-        return Regex(groupPicKeys).find(messageContent.toLowerCase()) != null
+        return Regex(groupPicKeys).find(messageContent.lowercase()) != null
     }
 
     fun editGroupPicKeys(groupId: Long, key: String, operation: String = "ADD"): MessageChain {
@@ -771,7 +753,7 @@ class Moca {
                 if (groupPicKeys == "") {
                     mocaDB.saveGroupPicKeywords(groupId, key)
                     return PlainText("成功添加群关键词【$key】").toMessageChain()
-                } else if (Regex(groupPicKeys).find(key.toLowerCase()) != null) {
+                } else if (Regex(groupPicKeys).find(key.lowercase()) != null) {
                     return PlainText("错误：已存在能识别【${key}】的群关键词，请勿重复添加").toMessageChain()
                 }
                 keysList.add(key)
@@ -811,9 +793,9 @@ class Moca {
     }
 
     fun isReachedMessageLimit(groupId: Long): Boolean {
-        // mocaLogger.info("current remain: ${mapGroupFrequencyLimiter[groupId]}")
+        mocaLogger.debug("$groupId: message limit remain: ${mapGroupFrequencyLimiter[groupId]}")
         return mapGroupFrequencyLimiter[groupId] == 0
     }
 
-    fun testFunction(){ }
+    // fun testFunction(){ }
 }

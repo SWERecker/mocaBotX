@@ -6,7 +6,6 @@ import com.mongodb.client.MongoCollection
 import com.mongodb.client.MongoDatabase
 import com.mongodb.client.model.Projections
 import com.mongodb.client.model.UpdateOptions
-import net.mamoe.mirai.utils.MiraiLogger
 import org.bson.Document
 import redis.clients.jedis.JedisPool
 import redis.clients.jedis.JedisPoolConfig
@@ -30,7 +29,7 @@ val colGroupCount: MongoCollection<Document> = db.getCollection("group_count")
 val colUserConfig: MongoCollection<Document> = db.getCollection("user_config")
 val colGroupPic: MongoCollection<Document> = db.getCollection("group_pic")
 val colMocaLog: MongoCollection<Document> = db.getCollection("moca_log")
-val mocaDBLogger = MiraiLogger.create("MocaDBLogger")
+
 val redisPool = JedisPool(JedisPoolConfig())
 
 
@@ -48,7 +47,8 @@ class MocaDatabase {
                 )
             )
         for (groupMap in queryResult) {
-            loadGroupKeyword(groupMap["group"].toString())
+            loadGroupKeyword(groupMap["group"].toString().toLong())
+
         }
     }
 
@@ -99,14 +99,14 @@ class MocaDatabase {
             colUserConfig.updateOne(query, operationDocument, enableUpsert)
         }
         if (saveResult.upsertedId != null || saveResult.modifiedCount > 0) {
-            mocaDBLogger.info("Set $setType $userId $arg => $value")
+            mocaDBLogger.info("OK. Set $setType $userId $arg => $value")
             mocaLog("DbSetConfig", targetId = userId, description = "type = $setType, arg = $arg, value = $value")
             if (setType == "GROUP") {
                 mocaDBLogger.info("Load $userId config to cache")
-                loadGroupConfig(userId.toString())
+                loadGroupConfig(userId)
             }
         } else {
-            mocaDBLogger.info("DB not modified")
+            mocaDBLogger.info("Unmodified, trying to Set $setType $userId $arg => $value")
         }
         return saveResult.modifiedCount > 0
     }
@@ -141,7 +141,7 @@ class MocaDatabase {
 
         if (!keyInited) {
             mocaDBLogger.info("========Init group $groupIdInt keyword========")
-            query["group"] = "key_template"
+            query["group"] = 0
             val queryResult = colGroupKeyword.find(query).first()
             if (queryResult.isNullOrEmpty()) {
                 mocaDBLogger.error("[ERROR] Template keyword not found.")
@@ -160,7 +160,7 @@ class MocaDatabase {
 
         if (!configInited) {
             mocaDBLogger.info("========Init group $groupIdInt config========")
-            query["group"] = "config_template"
+            query["group"] = 0
             val queryResult = colGroupConfig.find(query)
                 .projection(Projections.excludeId())
                 .first()
@@ -179,8 +179,8 @@ class MocaDatabase {
         if (keyInited && configInited) {
             mocaLog("GroupInit", groupId = groupId, description = "success")
             mocaDBLogger.info("Successfully initialized group $groupIdInt")
-            loadGroupKeyword(groupId.toString())
-            loadGroupConfig(groupId.toString())
+            loadGroupKeyword(groupId)
+            loadGroupConfig(groupId)
         }
     }
 
@@ -201,7 +201,7 @@ class MocaDatabase {
         val saveResult = colGroupKeyword.updateOne(query, operationDocument)
         if (saveResult.modifiedCount > 0) {
             mocaDBLogger.info("[$groupId] Reloading groupKeyword ")
-            loadGroupKeyword(groupId.toString())
+            loadGroupKeyword(groupId)
         }
     }
 
@@ -281,7 +281,7 @@ class MocaDatabase {
             val operationResult = colGroupCount.updateOne(query, operationDocument)
             if (operationResult.modifiedCount > 0) {
                 mocaLog("GroupCountUpdate", groupId = groupId, description = name)
-                mocaDBLogger.info("[$groupId] $name += 1")
+                mocaDBLogger.info("$groupId: $name += 1")
             return true
         }
         return false
@@ -290,17 +290,12 @@ class MocaDatabase {
     /**
      * 从数据库中获取某群组的参数.
      *
-     * @param groupIdString 群号 in String
+     * @param groupId 群号
      *
      * @return
      *
      */
-    private fun loadGroupConfig(groupIdString: String) {
-        if (groupIdString == "config_template") {
-            mocaDBLogger.info("loadGroupConfig: Skip $groupIdString")
-            return
-        }
-        val groupId = groupIdString.toLong()
+    private fun loadGroupConfig(groupId: Long) {
         val query = Document()
             .append("group", groupId)
         val queryResult = colGroupConfig.find(query)
@@ -333,26 +328,21 @@ class MocaDatabase {
                 )
             )
         for (groupMap in queryResult) {
-            loadGroupConfig(groupMap["group"].toString())
+            loadGroupConfig(groupMap["group"].toString().toLong())
         }
     }
 
     /**
      * 从数据库中获取某群组的关键词列表.
      *
-     * @param groupIdString 群号 in String
+     * @param groupId 群号
      *
      * @return
      *
      */
-    private fun loadGroupKeyword(groupIdString: String) {
-        if (groupIdString == "key_template") {
-            mocaDBLogger.info("loadGroupKeyword: Skip $groupIdString")
-            return
-        }
-        val groupIdLong = groupIdString.toLong()
+    private fun loadGroupKeyword(groupId: Long) {
         val query = Document()
-            .append("group", groupIdLong)
+            .append("group", groupId)
         val queryResult = colGroupKeyword.find(query)
             .projection(Projections.excludeId())
             .first()
@@ -363,7 +353,7 @@ class MocaDatabase {
                 groupKeyword.forEach {
                     tempKeyword[it.key.toString()] = it.value.toString()
                 }
-                mapGroupKeywords[groupIdLong] = tempKeyword
+                mapGroupKeywords[groupId] = tempKeyword
             } catch (e: ClassCastException) {
                 mocaDBLogger.error("ClassCastException in group: ${queryResult["group"]}")
             } catch (e: java.lang.ClassCastException) {
