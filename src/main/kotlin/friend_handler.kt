@@ -29,9 +29,17 @@ class MocaFriendMessage(
                         toSendContent.add(it)
                     }
                 }
+                val ignoreGroups = mutableListOf<Long>()
+                getBotConfig("GG_IGNORE_GROUPS").split(",").also {
+                    for (str in it) {
+                        ignoreGroups.add(str.toLong())
+                    }
+                }
                 event.bot.groups.forEach {
-                    mocaLogger.debug("Superman: Sending Message to: ${it.id}")
-                    it.sendMessage(toSendContent.toMessageChain())
+                    if (it.id !in ignoreGroups) {
+                        mocaLogger.info("Superman: Sending Message to: ${it.id}")
+                        it.sendMessage(toSendContent.toMessageChain())
+                    }
                     delay(1000)
                 }
             }
