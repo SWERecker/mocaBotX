@@ -102,7 +102,7 @@ class Moca {
      *
      */
     fun groupConfigEnabled(groupId: Long, arg: String): Boolean {
-        val groupConfig = getGroupConfig(groupId, arg) ?: return true
+        val groupConfig = getGroupConfig(groupId, arg) ?: return false
         return groupConfig.toString().toInt() == 1
     }
 

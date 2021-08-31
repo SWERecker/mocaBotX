@@ -15,6 +15,8 @@ This bot is based on [mirai](https://github.com/mamoe/mirai)
 * * [x] 查看当前参数
 * * [x] 打开/关闭[面包功能/翻译功能/随机选歌/指令功能/实验功能/欢迎新人]
 
+---
+
 成员
 * * [x] @机器人 关键词
 * * [x] @机器人 图片数量统计/统计图片数量
@@ -38,7 +40,19 @@ This bot is based on [mirai](https://github.com/mamoe/mirai)
 * * [x] !rd [k] [m] [n] roll骰子
 * * [x] !r a b [c]... 随机事件
 * * [x] !c something something为(0, 100).random
-
+* * [x] !lb 城市 省(可选)
+* * [x] !wetdy [地点] 今日天气
+---
 * [x] 开发者被移除自动退群
 * [x] 欢迎新人入群
 * [x] 自动接受开发者邀请
+
+
+`index.txt` 格式
+```
+--- 日期 ---
+相对img路径|分类1 分类2
+--- 日期 ---
+相对img路径|分类1 分类2
+```
+

@@ -6,10 +6,10 @@ plugins {
 }
 
 group = "me.swe"
-version = "1.1.1-PHONE-27-RC"
+version = "1.1.4-PHONE-27"
 
 repositories {
-    // mavenCentral()
+    mavenCentral()
     jcenter()
     maven { url = uri("https://maven.aliyun.com/nexus/content/groups/public/") }
 }
@@ -17,7 +17,7 @@ repositories {
 dependencies {
     // testImplementation(kotlin("test-junit"))
     runtimeOnly("net.mamoe:mirai-login-solver-selenium:1.0-dev-17")
-    val miraiVersion = "2.7-RC"
+    val miraiVersion = "2.7.0"
     api("net.mamoe", "mirai-core-api", miraiVersion)     // 编译代码使用
     runtimeOnly("net.mamoe", "mirai-core", miraiVersion) // 运行时使用
     api("org.mongodb", "mongodb-driver-sync", "4.2.2")

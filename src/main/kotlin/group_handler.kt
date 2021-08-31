@@ -868,7 +868,7 @@ class MocaGroupMessage(
                 val signInHour = signIn.signInTime.toDateStr("HH").toInt()
                 val cityId = mocaDB.getUserConfig(senderId, "loc_id").toString()
                 var weatherText = ""
-                if(moca.groupConfigEnabled(event.group.id, "exp") && cityId != "") {
+                if(moca.groupConfigEnabled(event.group.id, "exp") && cityId != "NOT_FOUND") {
                     val location = mocaDB.getUserConfig(senderId, "loc_name")
                     weatherText = when{
                             (signInHour in 0..17) -> {

@@ -81,7 +81,6 @@ fun weatherLookup(cityId: String, whichDayIn3Days: Int = 1): WeatherData {
     reqBuilder.url(wpCity3DWeatherUri)
     reqBuilder.get()
     val we3DCall = client.newCall(reqBuilder.build())
-
     try {
         val response = we3DCall.execute().body!!.string()
         val jsonMap = jsonStringToMap(response)
@@ -90,20 +89,21 @@ fun weatherLookup(cityId: String, whichDayIn3Days: Int = 1): WeatherData {
             val weather3D = jsonMap["daily"] as List<*>
             val dayIndex = whichDayIn3Days - 1
             val dayWeather = weather3D[dayIndex] as Map<*, *>
-            wData.fxDate = dayWeather["fxDate"].toString()
+            wData.apply {
+                fxDate = dayWeather["fxDate"].toString()
+                tempMin = dayWeather["tempMin"].toString()
+                tempMax = dayWeather["tempMax"].toString()
+                humidity = dayWeather["humidity"].toString()
+                precipDay = dayWeather["precip"].toString()
 
-            wData.tempMin = dayWeather["tempMin"].toString()
-            wData.tempMax = dayWeather["tempMax"].toString()
-            wData.humidity = dayWeather["humidity"].toString()
-            wData.precipDay = dayWeather["precip"].toString()
+                textDay = dayWeather["textDay"].toString()
+                textNight = dayWeather["textNight"].toString()
 
-            wData.textDay = dayWeather["textDay"].toString()
-            wData.textNight = dayWeather["textNight"].toString()
-
-            wData.windDirDay = dayWeather["windDirDay"].toString()
-            wData.windDirNight = dayWeather["windDirNight"].toString()
-            wData.windScaleDay = dayWeather["windScaleDay"].toString()
-            wData.windScaleNight = dayWeather["windScaleNight"].toString()
+                windDirDay = dayWeather["windDirDay"].toString()
+                windDirNight = dayWeather["windDirNight"].toString()
+                windScaleDay = dayWeather["windScaleDay"].toString()
+                windScaleNight = dayWeather["windScaleNight"].toString()
+            }
         }
     }
     catch (e: IOException) {
@@ -121,12 +121,15 @@ fun weatherLookup(cityId: String, whichDayIn3Days: Int = 1): WeatherData {
         wData.code = jsonMap["code"].toString()
         if (jsonMap["code"].toString() == "200") {
             val weatherNow = jsonMap["now"] as Map<*, *>
-            wData.obsTime = weatherNow["obsTime"].toString()
-            wData.textNow = weatherNow["text"].toString()
-            wData.tempNow = weatherNow["temp"].toString()
-            wData.tempFeelsLike = weatherNow["feelsLike"].toString()
-            wData.windDirNow = weatherNow["windDir"].toString()
-            wData.windScaleNow = weatherNow["windScale"].toString()
+            wData.apply {
+                obsTime = weatherNow["obsTime"].toString()
+                textNow = weatherNow["text"].toString()
+                tempNow = weatherNow["temp"].toString()
+                tempFeelsLike = weatherNow["feelsLike"].toString()
+                windDirNow = weatherNow["windDir"].toString()
+                windScaleNow = weatherNow["windScale"].toString()
+            }
+
         }
     }
     catch (e: IOException) {

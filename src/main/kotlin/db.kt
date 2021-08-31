@@ -465,11 +465,13 @@ fun loadIndexFile(): Int {
         val inStream: InputStream = File(indexFilePath).inputStream()
         inStream.bufferedReader().useLines { lines ->
             lines.forEach {
-                val line = it.split('|')
-                val filePath = picturePath + line[0]
-                val categories = line[1].split(' ')
-                categories.forEach { category ->
-                    r.sadd(category, filePath)
+                if(!it.startsWith("-")) {
+                    val line = it.split('|')
+                    val filePath = picturePath + line[0]
+                    val categories = line[1].split(' ')
+                    categories.forEach { category ->
+                        r.sadd(category, filePath)
+                    }
                 }
             }
         }
