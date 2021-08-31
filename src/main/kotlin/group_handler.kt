@@ -868,20 +868,20 @@ class MocaGroupMessage(
                 val signInHour = signIn.signInTime.toDateStr("HH").toInt()
                 val cityId = mocaDB.getUserConfig(senderId, "loc_id").toString()
                 var weatherText = ""
-                if(moca.groupConfigEnabled(event.group.id, "exp") && cityId != "NOT_FOUND") {
+                if(cityId != "NOT_FOUND") {
                     val location = mocaDB.getUserConfig(senderId, "loc_name")
-                    weatherText = when{
-                            (signInHour in 0..17) -> {
-                                val wData = weatherLookup(cityId)
-                                "今天${location}${wData.textDay}，温度${wData.tempMin}℃ ~ ${wData.tempMax}℃，" +
-                                        "总降雨量为${wData.precipDay}mm"
-                            } else -> {
-                                val wData = weatherLookup(cityId, 2)
-                                println(wData.fxDate)
-                                "明天${location}${wData.textDay}，温度${wData.tempMin}℃ ~ ${wData.tempMax}℃，" +
-                                        "总降雨量为${wData.precipDay}mm"
-                            }
+                    weatherText = when {
+                        (signInHour in 0..17) -> {
+                            val wData = weatherLookup(cityId)
+                            "今天${location}${wData.textDay}，温度${wData.tempMin}℃ ~ ${wData.tempMax}℃，" +
+                                    "总降雨量为${wData.precipDay}mm"
                         }
+                        else -> {
+                            val wData = weatherLookup(cityId, 2)
+                            "明天${location}${wData.textDay}，温度${wData.tempMin}℃ ~ ${wData.tempMax}℃，" +
+                                    "总降雨量为${wData.precipDay}mm"
+                        }
+                    }
                 }
                 val greetWord: String = when(signInHour){
                     in (0..3) -> {
