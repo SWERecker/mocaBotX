@@ -58,19 +58,37 @@ class MocaDatabase {
      * @param userId 群号
      * @param arg 参数名称
      *
-     * @return 参数值
+     * @return 参数值/"NOT_FOUND"
      *
      */
-    fun getUserConfig(userId: Long, arg: String): Any? {
+    fun getUserConfig(userId: Long, arg: String): String {
         val query = Document()
             .append("qq", userId)
         val queryResult = colUserConfig.find(query)
             .projection(Projections.fields(Projections.excludeId(), Projections.include(arg)))
             .first()
         if (!queryResult.isNullOrEmpty()) {
-            return queryResult[arg]
+            return queryResult[arg].toString()
         }
         return "NOT_FOUND"
+    }
+
+    /**
+     * 获取用户参数，以Int返回，不存在为0，存在为参数值
+     *
+     * @param userId 用户QQ号
+     * @param arg 参数名称
+     *
+     * @return 面包数量(Int)
+     */
+    fun getUserConfigInt(userId: Long, arg: String): Int {
+        return getUserConfig(userId, arg).let {
+            if (it.isNotFound()) {
+                0
+            }else{
+                it.toInt()
+            }
+        }
     }
 
     /**

@@ -21,6 +21,7 @@ val protectedKeys = arrayListOf(
 )
 
 val Slash: String = File.separator
+
 val mocaDB = MocaDatabase()
 val moca = Moca()
 
@@ -280,4 +281,38 @@ class DrawResult {
      */
     var pictureFile = ""
 
+}
+
+class PanModifyResult{
+    /**
+     * 状态（成功/失败）
+     */
+    var status: Boolean = false
+    /**
+     * 修改后面包数量
+     */
+    var newPanNumber = 0
+}
+
+class BuyPanResult{
+    /**
+     * 状态（成功/失败）
+     */
+    var status = false
+    /**
+     * 是否初次购买
+     */
+    var isFirstTime = false
+    /**
+     * 购买数量
+     */
+    var buyNumber = 0
+    /**
+     * 在下次购买前需要等待的时间（秒）
+     */
+    var secondsToWait = 0L
+    /**
+     * 购买后面包数量
+     */
+    var newPanNumber = 0
 }

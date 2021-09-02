@@ -8,8 +8,6 @@ import net.mamoe.mirai.contact.nameCardOrNick
 import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.message.code.MiraiCode.deserializeMiraiCode
 import net.mamoe.mirai.message.data.*
-import net.mamoe.mirai.utils.ExternalResource.Companion.sendAsImageTo
-import net.mamoe.mirai.utils.ExternalResource.Companion.toExternalResource
 import java.io.File
 import java.lang.NumberFormatException
 
@@ -21,7 +19,6 @@ class MocaGroupMessage(
     private val groupId = event.group.id
     private val subj = event.subject
     suspend fun messageHandler() {
-        val messageContent = event.message.content
         val messageLimit = 6
 
         // 检查并初始化每分钟群组消息限制
@@ -214,15 +211,15 @@ class MocaGroupMessage(
                     subj.sendMessage("错误：ID范围：1~999")
                     return
                 }
-                sendGroupPicture(picId)
+                moca.groupPicture.sendGroupPicture(event, picId)
                 moca.setCd(groupId, "replyCD")
                 return
             }
 
             // 匹配群图片关键词(GroupPicture)
-            moca.matchGroupPicKey(groupId, messageContent).also {
+            moca.groupPicture.matchGroupPicKey(groupId, messageContent).also {
                 if (it) {
-                    sendGroupPicture()
+                    moca.groupPicture.sendGroupPicture(event)
                     moca.setCd(groupId, "replyCD")
                     return
                 }
@@ -392,9 +389,9 @@ class MocaGroupMessage(
                     .replace(" ", "")
                 return if (toEditKey != "" && !containSpecialChar(toEditKey) && !containProtectedKeys(toEditKey)) {
                     if (messageContent.substring(0, 2) == "添加") {
-                        subj.sendMessage(moca.editGroupPicKeys(groupId, toEditKey, "ADD"))
+                        subj.sendMessage(moca.groupPicture.editGroupPicKeys(groupId, toEditKey, "ADD"))
                     } else {
-                        subj.sendMessage(moca.editGroupPicKeys(groupId, toEditKey, "REMOVE"))
+                        subj.sendMessage(moca.groupPicture.editGroupPicKeys(groupId, toEditKey, "REMOVE"))
                     }
                     true
                 } else {
@@ -405,10 +402,13 @@ class MocaGroupMessage(
 
             messageContent.startsWith("查看群关键词") -> {
                 val groupPicKeys = moca.getGroupPicKeyword(groupId)
-                if (groupPicKeys == "") {
+                return if (groupPicKeys == "") {
                     subj.sendMessage("群关键词为空.")
+                    true
+                }else {
+                    subj.sendMessage("群关键词：$groupPicKeys")
+                    true
                 }
-                subj.sendMessage("群关键词：$groupPicKeys")
             }
         }
 
@@ -465,7 +465,7 @@ class MocaGroupMessage(
                 subj.sendMessage("错误：你需要包含一张图片")
                 return true
             }
-            subj.sendMessage(moca.submitGroupPictures(groupId,
+            subj.sendMessage(moca.groupPicture.submitGroupPictures(groupId,
                 event.message.filterIsInstance<Image>(), picId)
             )
             return true
@@ -482,7 +482,7 @@ class MocaGroupMessage(
             }catch (e: NumberFormatException) {
                 -1
             }
-            moca.deleteGroupPicById(groupId, picId).also {
+            moca.groupPicture.deleteGroupPicById(groupId, picId).also {
                 if (it != "") {
                     subj.sendMessage(it)
                 }
@@ -507,6 +507,88 @@ class MocaGroupMessage(
             "RELOAD_KEY" -> {
                 val reloadResult = moca.reloadAllGroupKeyword()
                 subj.sendMessage(reloadResult)
+                return true
+            }
+        }
+        when{
+            messageContent.startsWith("SET_PAN") -> {
+                val paras = messageContent
+                    .replace(" ", "")
+                    .substring(7)
+                    .trim()
+                    .split(',')
+                if (paras.size == 2) {
+                    val qq = paras[0].toLong()
+                    val panNum = paras[1].toInt()
+                    moca.pan.setUserPan(qq, panNum)
+                    subj.sendMessage("Result: $qq pan: ${moca.pan.getUserPan(senderId)}")
+                }
+                return true
+            }
+            messageContent.startsWith("RESET") -> {
+                var userId = 0L
+                var toResetArg = ""
+                var initValue: Any = 0L
+                val paras = messageContent
+                    .replace(" ", "")
+                    .substring(5)
+                    .trim()
+                    .split(',')
+                fun argConvert(arg: String): Pair<String, Any>{
+                   return when(arg){
+                        "SIGNIN" -> {
+                            Pair("signin_time", 0L)
+                        }
+                       "DRAW" -> {
+                           Pair("draw_time", 0L)
+                       }
+                       "BUY_PAN" -> {
+                           Pair("last_buy_time", 0L)
+                       }
+                       "CLP_TIMES" -> {
+                           Pair("clp_time", 0)
+                       }
+                       else -> {
+                           Pair("", 0L)
+                       }
+                    }
+                }
+                when (paras.size) {
+                    1 -> {
+                        val resetParam = argConvert(paras[0])
+                        if (resetParam.first == "") {
+                            subj.sendMessage("WRONG PARAMETER.")
+                            return true
+                        }
+                        userId = senderId
+                        toResetArg = resetParam.first
+                        initValue = resetParam.second
+                        }
+                    2 -> {
+                        try {
+                            userId = paras[0].toLong()
+                        } catch (e: NumberFormatException) {
+                            subj.sendMessage("WRONG QQ.")
+                            return true
+                        }
+                        val resetParam = argConvert(paras[1])
+                        if (resetParam.first == "") {
+                            subj.sendMessage("WRONG PARAMETER.")
+                            return true
+                        }
+                        toResetArg = resetParam.first
+                        initValue = resetParam.second
+                    }
+                }
+                subj.sendMessage(
+                    moca.setUserConfig(userId, toResetArg, initValue).let {
+                        if (it) {
+                            "RESET OK. $userId $toResetArg = $initValue"
+                        } else {
+                            "RESET ERROR."
+                        }
+                    }
+                )
                 return true
             }
         }
@@ -542,12 +624,12 @@ class MocaGroupMessage(
         var panResult = ""
         var pictureCount = 1
         if (imageParameter.second) {
-            moca.eatPan(senderId, 3).also {
-                if (it.first) {
-                    panResult = "摩卡吃掉了3个面包，你还剩${it.second}个面包哦~"
+           panResult = moca.eatPan(senderId, 3).let {
+                if (it.status) {
                     pictureCount = 2
+                    "摩卡吃掉了3个面包，你还剩${it.newPanNumber}个面包哦~"
                 } else {
-                    panResult = "呜呜呜，你的面包不够吃了呢..."
+                    "呜呜呜，你的面包不够吃了呢..."
                 }
             }
         }
@@ -559,7 +641,7 @@ class MocaGroupMessage(
             toSendMessage += subj.uploadImage(File(filePath))
         }
         mocaLogger.debug(toSendMessage.toString())
-        moca.updateCount(groupId, imageParameter.first)
+        mocaDB.updateGroupCount(groupId, imageParameter.first)
         subj.sendMessage(toSendMessage.toMessageChain())
         return true
     }
@@ -574,21 +656,21 @@ class MocaGroupMessage(
         if (atTarget == event.bot.id) {
             when {
                 messageContent.contains("关键词") -> {
-                    subj.sendImage(File(moca.buildGroupKeywordPicture(groupId)))
+                    subj.sendImage(File(moca.buildGroupKeywordImage(groupId)))
                     return true
                 }
 
                 (messageContent.contains("图片数量统计") || messageContent.contains("统计图片数量")) -> {
-                    subj.sendImage(File(moca.buildGroupPictureCount(groupId)))
+                    subj.sendImage(File(moca.buildGroupPictureCountImage(groupId)))
                     return true
                 }
 
                 messageContent.contains("统计次数") -> {
-                    subj.sendImage(File(moca.buildGroupCountPicture(groupId)))
+                    subj.sendImage(File(moca.buildGroupCountImage(groupId)))
                     return true
                 }
                 messageContent.contains("语音") || messageContent.contains("说话") -> {
-                    sendVoice()
+                    moca.sendVoice(event)
                     return true
                 }
             }
@@ -635,25 +717,6 @@ class MocaGroupMessage(
             }
         }
         return false
-    }
-
-    /**
-     * 发送语音
-     */
-    private suspend fun sendVoice() {
-        val voiceFolder = File("resource" + File.separator + "voice")
-        val voiceFiles = voiceFolder.listFiles()
-        if (!voiceFiles.isNullOrEmpty()) {
-            val voiceFile = File(voiceFiles.random().absolutePath).toExternalResource()
-            voiceFile.use {
-                subj.uploadAudio(voiceFile).sendTo(event.group)
-//                return buildMessageChain {
-//                    +uploadVoice
-//                }
-            }
-        }
-//        return buildMessageChain {
-//        }
     }
 
     /**
@@ -742,7 +805,12 @@ class MocaGroupMessage(
             }
             "bl" -> {
                 paraList.drop(1).also {
-                    subj.sendMessage(userBindCity(senderId, it))
+                    subj.sendMessage(
+                        buildMessageChain {
+                            +At(senderId)
+                            +PlainText(userBindCity(senderId, it))
+                        }
+                    )
                 }
                 return true
             }
@@ -753,14 +821,17 @@ class MocaGroupMessage(
                 var cityCountry = ""
                 when(paraList.size) {
                     1 -> {
-                        cityId = mocaDB.getUserConfig(senderId, "loc_id").toString()
+                        cityId = mocaDB.getUserConfig(senderId, "loc_id")
                         if (cityId == "") {
-                            subj.sendMessage("错误：尚未绑定城市，请使用【!bl 城市 [省](可选)】进行绑定.")
+                            buildMessageChain {
+                                +At(senderId)
+                                +PlainText(" 错误：尚未绑定城市，请使用【!bl 城市 [省](可选)】进行绑定.")
+                            }
                             return true
                         }
-                        cityName = mocaDB.getUserConfig(senderId, "loc_name").toString()
-                        cityAdm = mocaDB.getUserConfig(senderId, "loc_adm").toString()
-                        cityCountry = mocaDB.getUserConfig(senderId, "loc_con").toString()
+                        cityName = mocaDB.getUserConfig(senderId, "loc_name")
+                        cityAdm = mocaDB.getUserConfig(senderId, "loc_adm")
+                        cityCountry = mocaDB.getUserConfig(senderId, "loc_con")
                     }
                     2, 3 -> {
                         paraList.drop(1).also {
@@ -772,12 +843,18 @@ class MocaGroupMessage(
                         }
                     }
                     else -> {
-                        subj.sendMessage("错误：参数数量有误.")
+                        buildMessageChain {
+                            +At(senderId)
+                            +PlainText(" 错误：参数数量有误.")
+                        }
                     }
                 }
                 val wData = weatherLookup(cityId)
                 if (wData.code != "200") {
-                    subj.sendMessage("错误：查询的城市有误，请检查.")
+                    buildMessageChain {
+                        +At(senderId)
+                        +PlainText(" 错误：查询的城市有误，请检查.")
+                    }
                     return true
                 }
                 subj.sendMessage(
@@ -803,62 +880,62 @@ class MocaGroupMessage(
                 subj.sendMessage(
                     buildMessageChain {
                         +At(senderId)
-                        +PlainText(" 您现在有${moca.getUserPan(senderId)}个面包呢~")
+                        +PlainText(" 您现在有${moca.pan.getUserPan(senderId)}个面包呢~")
                     }
                 )
                 return true
             }
             in arrayListOf("买面包", "来点面包") -> {
                 val buyResult = moca.buyPan(senderId)
-                when (buyResult.first) {
-                    -1 -> {
-                        var toWaitTimeString = ""
-                        toWaitTimeString += if (buyResult.second < 60) {
-                            "${buyResult.second}秒"
-                        } else {
-                            "${buyResult.second / 60}分钟"
-                        }
+                if (buyResult.status) {
+                    if (buyResult.isFirstTime) {
+                        // first time
                         subj.sendMessage(
                             buildMessageChain {
                                 +At(senderId)
-                                +PlainText(" 还不能买面包呢~还要等${toWaitTimeString}呢~")
-                            }
-                        )
-                        return true
-                    }
-                    in (1..10) -> {
-                        subj.sendMessage(
-                            buildMessageChain {
-                                +At(senderId)
-                                +PlainText("\n初次成功购买了${buyResult.first}个面包！以后每小时可以购买一次哦~")
+                                +PlainText("\n初次成功购买了${buyResult.buyNumber}个面包！以后每小时可以购买一次哦~")
                                 +PlainText("\n有空的话，常来买哦~")
-                                +PlainText("\n你现在有${buyResult.second}个面包啦~")
+                                +PlainText("\n你现在有${buyResult.newPanNumber}个面包啦~")
                             }
                         )
                         return true
-                    }
-                    in (11..20) -> {
+                    } else {
                         subj.sendMessage(
                             buildMessageChain {
                                 +At(senderId)
-                                +PlainText(" 成功购买了${buyResult.first - 10}个面包，你现在有${buyResult.second}个面包啦~")
+                                +PlainText(" 成功购买了${buyResult.buyNumber}个面包，" +
+                                        "你现在有${buyResult.newPanNumber}个面包啦~")
                             }
                         )
                         return true
                     }
+                } else {
+                    val toWaitTimeString = if (buyResult.secondsToWait < 60) {
+                        "${buyResult.secondsToWait}秒"
+                    } else {
+                        "${buyResult.secondsToWait / 60}分钟"
+                    }
+                    subj.sendMessage(
+                        buildMessageChain {
+                            +At(senderId)
+                            +PlainText(" 还不能买面包呢~还要等${toWaitTimeString}呢~")
+                        }
+                    )
+                    return true
                 }
             }
             in arrayListOf("吃面包", "恰面包") -> {
-                val eatResult = moca.eatPan(senderId, 1)
-                val resultText = if (eatResult.first) {
-                    "你吃掉了1个面包，还剩${eatResult.second}个面包了哦~"
-                } else {
-                    "呜呜呜，面包不够吃了呢..."
-                }
                 subj.sendMessage(
                     buildMessageChain {
                         +At(senderId)
-                        +PlainText(resultText)
+                        +PlainText(
+                            moca.eatPan(senderId, 1).let {
+                            if (it.status) {
+                                " 你吃掉了1个面包，还剩${it.newPanNumber}个面包了哦~"
+                            } else {
+                                " 呜呜呜，面包不够吃了呢..."
+                            }
+                        })
                     }
                 )
                 return true
@@ -866,7 +943,7 @@ class MocaGroupMessage(
             "签到" -> {
                 val signIn = moca.userSignIn(senderId)
                 val signInHour = signIn.signInTime.toDateStr("HH").toInt()
-                val cityId = mocaDB.getUserConfig(senderId, "loc_id").toString()
+                val cityId = mocaDB.getUserConfig(senderId, "loc_id")
                 var weatherText = ""
                 if(cityId != "NOT_FOUND") {
                     val location = mocaDB.getUserConfig(senderId, "loc_name")
@@ -891,19 +968,19 @@ class MocaGroupMessage(
                          "清晨了~"
                     }
                     in (7..10) -> {
-                        "上午好"
+                        "上午好！"
                     }
                     in (11..13) -> {
-                        "中午好"
+                        "中午好！"
                     }
                     in (13..16) -> {
-                        "下午好"
+                        "下午好~"
                     }
                     in (17..18) -> {
-                        "傍晚好"
+                        "傍晚好~"
                     }
                     else -> {
-                        "晚上好"
+                        "晚上好~"
                     }
                 }
                 subj.sendMessage(
@@ -1033,29 +1110,5 @@ class MocaGroupMessage(
         val toSendMessage = mapGroupRepeater[groupId]?.get(1).toString().deserializeMiraiCode()
         subj.sendMessage(toSendMessage)
         mapGroupRepeater[groupId]?.set(3, event.message.serializeToMiraiCode())
-    }
-
-    /**
-     * 发送群图片.
-     */
-    private suspend fun sendGroupPicture(picId: Int = -1) {
-        if (picId == -1) {
-            val groupPicFolder = File("resource" + File.separator + "group_pic" + File.separator + groupId.toString())
-            val groupPics = groupPicFolder.listFiles()
-            if (!groupPics.isNullOrEmpty()) {
-                File(groupPics.random().absolutePath).sendAsImageTo(event.group)
-            } else {
-                event.group.sendMessage("群图片为空，请发送【使用说明】查看添加方法.")
-            }
-        } else {
-            val toSendPic = moca.getGroupPicById(groupId, picId)
-            if (!toSendPic.isEmpty()) {
-                File("resource" + File.separator + "group_pic" + File.separator +
-                        groupId.toString() + File.separator + toSendPic["name"])
-                    .sendAsImageTo(event.group)
-            } else {
-                event.group.sendMessage("指定ID=${picId}的图片不存在.")
-            }
-        }
     }
 }

@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "me.swe"
-version = "1.1.4.2-PHONE-27"
+version = "1.1.5-PHONE-27"
 
 repositories {
     mavenCentral()

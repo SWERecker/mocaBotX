@@ -12,15 +12,15 @@ val client = OkHttpClient()
 
 fun userBindCity(userId: Long, paraList: List<String>): String{
     val cityResult = cityLookup(paraList)
-    println(cityResult)
+    // println(cityResult)
     if (cityResult["code"] != "200") {
-        return "查询失败！请检查输入的城市是否正确！\n绑定示例：!bl 苏州 江苏(可选)"
+        return " 查询失败！请检查输入的城市是否正确！\n绑定示例：!bl 苏州 江苏(可选)"
     }
-    mocaDB.setConfig(userId, "USER", "loc_name", cityResult["name"] as String)
-    mocaDB.setConfig(userId, "USER", "loc_adm", cityResult["adm1"] as String)
-    mocaDB.setConfig(userId, "USER", "loc_id", cityResult["id"] as String)
-    mocaDB.setConfig(userId, "USER", "loc_con", cityResult["country"] as String)
-    return  "绑定成功！\n当前绑定城市：${cityResult["name"]}，${cityResult["adm1"]}，${cityResult["country"]}"
+    moca.setUserConfig(userId, "loc_name", cityResult["name"] as String)
+    moca.setUserConfig(userId, "loc_adm", cityResult["adm1"] as String)
+    moca.setUserConfig(userId, "loc_id", cityResult["id"] as String)
+    moca.setUserConfig(userId,  "loc_con", cityResult["country"] as String)
+    return " 绑定成功！\n当前绑定城市：${cityResult["name"]}，${cityResult["adm1"]}，${cityResult["country"]}"
 }
 
 

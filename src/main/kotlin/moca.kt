@@ -1,8 +1,11 @@
 package me.swe.main
 
 
+import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.message.data.Image.Key.queryUrl
+import net.mamoe.mirai.utils.ExternalResource.Companion.sendAsImageTo
+import net.mamoe.mirai.utils.ExternalResource.Companion.toExternalResource
 import org.bson.Document
 import java.io.File
 
@@ -11,6 +14,8 @@ val mocaPaPath = File("resource" + Slash + "pa" + Slash)
 val mocaKeaiPath = File("resource" + Slash + "keai" + Slash)
 
 class Moca {
+    val groupPicture = GroupPicture()
+    val pan = Pan()
     /**
      * 初始化，从数据库中加载所有群组的关键词列表至内存.
      */
@@ -157,7 +162,7 @@ class Moca {
         }
         val groupKeyword = getGroupKeyword(groupId)
         return if (toSetLpName in groupKeyword.keys) {
-            mocaDB.setConfig(userId, "USER", "lp", toSetLpName)
+            moca.setUserConfig(userId, "lp", toSetLpName)
             mocaDB.updateUserChangeLpTimes(userId)
             buildMessageChain {
                 +At(userId)
@@ -276,14 +281,7 @@ class Moca {
      * @return 返回次数
      */
     fun getChangeLpTimes(userId: Long): Int {
-        val queryResult = mocaDB.getUserConfig(userId, "clp_time").toString()
-        return try {
-            queryResult.toInt()
-        } catch (e: NumberFormatException) {
-            0
-        } catch (e: Exception) {
-            0
-        }
+        return mocaDB.getUserConfigInt(userId, "clp_time")
     }
 
     /**
@@ -294,8 +292,8 @@ class Moca {
      * @return 未设置：NOT_SET 正常返回设置的lp名称
      */
     fun getUserLp(userId: Long): String {
-        val userLp = mocaDB.getUserConfig(userId, "lp") as String
-        if (userLp == "NOT_FOUND") {
+        val userLp = mocaDB.getUserConfig(userId, "lp")
+        if (userLp.isNotFound()) {
             return "NOT_SET"
         }
         return userLp
@@ -321,7 +319,7 @@ class Moca {
      *
      * @return 图像的绝对路径
      */
-    fun buildGroupKeywordPicture(groupId: Long): String {
+    fun buildGroupKeywordImage(groupId: Long): String {
         val imageMaker = MultiLineTextToImage
         return imageMaker.buildImage(
             "关键词列表",
@@ -337,7 +335,7 @@ class Moca {
      *
      * @return 图像的绝对路径
      */
-    fun buildGroupPictureCount(groupId: Long): String {
+    fun buildGroupPictureCountImage(groupId: Long): String {
         val imageMaker = MultiLineTextToImage
         return imageMaker.buildImage(
             "图片数量统计",
@@ -353,7 +351,7 @@ class Moca {
      *
      * @return 图像的绝对路径
      */
-    fun buildGroupCountPicture(groupId: Long): String {
+    fun buildGroupCountImage(groupId: Long): String {
         val imageMaker = MultiLineTextToImage
         return imageMaker.buildImage(
             "次数统计",
@@ -368,27 +366,13 @@ class Moca {
      * @return true/false(是/不是Superman)
      */
     fun isSuperman(userId: Long): Boolean {
-        val supermanId = mutableListOf<Long>()
+        val supermanIds = mutableListOf<Long>()
         getBotConfig("SUPERMAN").split(',').also {
             for (str in it) {
-                supermanId.add(str.toLong())
+                supermanIds.add(str.toLong())
             }
         }
-        return userId in supermanId
-    }
-
-    /**
-     * 调用mocaDB.dbInitGroup
-     */
-    fun initGroup(id: Long) {
-        mocaDB.dbInitGroup(id)
-    }
-
-    /**
-     * 调用mocaDB.updateGroupCount
-     */
-    fun updateCount(groupId: Long, name: String) {
-        mocaDB.updateGroupCount(groupId, name)
+        return userId in supermanIds
     }
 
     /**
@@ -399,97 +383,59 @@ class Moca {
     }
 
     /**
-     * 获取用户面包数量
-     *
-     * @param userId 用户QQ号
-     *
-     * @return 面包数量(Int)
-     */
-    fun getUserPan(userId: Long): Int {
-        val userPan = mocaDB.getUserConfig(userId, "pan").also {
-            if (it == "NOT_FOUND") {
-                return 0
-            }
-        }
-        return userPan.toString().toInt()
-    }
-
-    /**
-     * 设置用户面包数量
-     *
-     * @param userId 用户QQ号
-     * @param panNumber 要设置的面包数量
-     *
-     * @return true/false(成功/失败)
-     */
-    private fun setUserPan(userId: Long, panNumber: Int): Boolean {
-        return mocaDB.setConfig(userId, "USER", "pan", panNumber)
-    }
-
-    /**
-     * 改变用户面包数量
-     *
-     * @param userId 用户QQ号
-     * @param delta 要设置的面包数量
-     *
-     * @return Pair(true/false(成功/失败), 改变后面包数量)
-     */
-    private fun panNumberModify(userId: Long, delta: Int): Pair<Boolean, Int> {
-        val userPan = getUserPan(userId)
-        return if (delta > 0) {
-            setUserPan(userId, userPan + delta)
-            mocaLog("UserPanNumChange", targetId = userId, description = "$delta")
-            Pair(true, getUserPan(userId))
-        } else {
-            if (-delta > userPan) {
-                mocaLogger.warn("$userId: Pan not enough($userPan < ${-delta})")
-                Pair(false, userPan)
-            } else {
-                setUserPan(userId, userPan + delta)
-                mocaLog("UserPanNumChange", targetId = userId, description = "$delta")
-                Pair(true, getUserPan(userId))
-            }
-        }
-    }
-
-    /**
      * 买面包
      *
      *
      *
      * @param userId 用户QQ号
      *
-     * @return Pair(购买状态, 参数值)
+     * @return BuyPanResult
      *
-     * 购买状态备注，参数值
+     * status = true/false
      *
-     *  -1(在买面包cd中), 还需要等待的时间(s)
+     * isFirstTime = true/false
      *
-     *  1~10(初次购买(此次买面包的数量)), 买完后拥有的面包数量
+     * buyNumber: 购买的面包数量
      *
-     *  10~20(购买成功(10 + 此次买面包的数量)), 买完后拥有的面包数量
+     * secondsToWait: 在cd中时还需等待的时间
      *
+     * newPanNumber: 购买成功后新的面包数量
      *
      */
-    fun buyPan(userId: Long): Pair<Int, Long> {
+    fun buyPan(userId: Long): BuyPanResult {
         val currentTimestamp = System.currentTimeMillis() / 1000
+        val buyPanResult = BuyPanResult()
         mocaDB.getUserConfig(userId, "last_buy_time").also {
-            return if (it == "NOT_FOUND") {
-                mocaDB.setConfig(userId, "USER", "last_buy_time", currentTimestamp)
+            return if (it.isNotFound()) {
+                // first buy
+                moca.setUserConfig(userId, "last_buy_time", currentTimestamp)
                 val buyCount = (1..10).random()
-                val modifyResult = panNumberModify(userId, buyCount)
+                val modifyResult = pan.modifyUserPan(userId, buyCount)
                 mocaLog("UserBuyPan", targetId = userId, description = "firstTime = True")
-                Pair(buyCount, modifyResult.second.toLong())
+                buyPanResult.apply {
+                    status = true
+                    isFirstTime = true
+                    buyNumber = buyCount
+                    newPanNumber = modifyResult.newPanNumber
+                }
             } else {
-                val userLastBuyTime = it.toString().toInt()
+                val userLastBuyTime = it.toInt()
                 if (currentTimestamp - userLastBuyTime < 3600) {
-                    Pair(-1, 3600L + userLastBuyTime - currentTimestamp)
+                    // in cd
+                    buyPanResult.apply {
+                        secondsToWait = 3600L + userLastBuyTime - currentTimestamp
+                    }
                 } else {
-                    mocaDB.setConfig(userId, "USER", "last_buy_time", currentTimestamp)
+                    // success buy
+                    moca.setUserConfig(userId, "last_buy_time", currentTimestamp)
                     val buyCount = (1..10).random()
-                    val modifyResult = panNumberModify(userId, buyCount)
+                    val modifyResult = pan.modifyUserPan(userId, buyCount)
                     mocaLog("UserBuyPan", targetId = userId, description = "firstTime = False")
-                    Pair(10 + buyCount, modifyResult.second.toLong())
+                    buyPanResult.apply {
+                        status = true
+                        buyNumber = buyCount
+                        newPanNumber = modifyResult.newPanNumber
+                    }
                 }
             }
         }
@@ -502,8 +448,8 @@ class Moca {
      *
      * @return Pair(状态（成功/失败）, 剩余面包数量)
      */
-    fun eatPan(userId: Long, panNumber: Int): Pair<Boolean, Int> {
-        return panNumberModify(userId, -panNumber)
+    fun eatPan(userId: Long, panNumber: Int): PanModifyResult {
+        return Pan().modifyUserPan(userId, -panNumber)
     }
 
     /**
@@ -514,30 +460,28 @@ class Moca {
      * @return arrayListOf(状态, 上次签到时间/签到时间, 合计签到天数, 用户面包数)
      */
     fun userSignIn(userId: Long): SignInResult {
-        val tempLastSignInTime = mocaDB.getUserConfig(userId, "signin_time").toString()
-        var lastSignInTime = 0L
-        if (!tempLastSignInTime.isNotFound()) {
-            lastSignInTime = tempLastSignInTime.toLong()
+        val signInResult = SignInResult()
+        val tempLastSignInTime = mocaDB.getUserConfig(userId, "signin_time")
+        val lastSignInTime = if (!tempLastSignInTime.isNotFound()) {
+            tempLastSignInTime.toLong()
+        } else {
+            0L
         }
         if (lastSignInTime > getTimestampStartOfToday() && lastSignInTime < getTimestampEndOfToday()) {
-            val returnResult = SignInResult()
-            returnResult.let {
-                it.signInCode = -1
-                it.signInTime = lastSignInTime
-                it.sumSignInDays = 0
-                it.newPanNumber = 0
+            signInResult.apply {
+                signInCode = -1
+                signInTime = lastSignInTime
+                sumSignInDays = 0
+                newPanNumber = 0
             }
-            return returnResult
+            return signInResult
         }
 
-        val tempUserPan = mocaDB.getUserConfig(userId, "pan").toString()
-        var userOwnPan = 0
+        val tempSumDay  = mocaDB.getUserConfig(userId, "sum_day")
         val signInTime = System.currentTimeMillis() / 1000
+        var userOwnPan = 0
         var sumSignInDay = 0
-        if (!tempUserPan.isNotFound()) {
-            userOwnPan = tempUserPan.toInt()
-        }
-        val tempSumDay = mocaDB.getUserConfig(userId, "sum_day").toString()
+
         if (!tempSumDay.isNotFound()) {
             sumSignInDay = tempSumDay.toInt()
         }
@@ -545,34 +489,30 @@ class Moca {
 
         return if (tempLastSignInTime.isNotFound()) {
             sumSignInDay += 1
-            mocaDB.setConfig(userId, "USER", "signin_time", signInTime)
-            mocaDB.setConfig(userId, "USER", "sum_day", sumSignInDay)
-            val panResult = panNumberModify(userId, 5)
+            moca.setUserConfig(userId, "signin_time", signInTime)
+            moca.setUserConfig(userId, "sum_day", sumSignInDay)
+            val panResult = pan.modifyUserPan(userId, 5)
             mocaLog("UserSignIn", targetId = userId,
                 description = "firstTime = True, sumSignInDay = $sumSignInDay, userOwnPan = $userOwnPan")
-            val returnResult = SignInResult()
-            returnResult.let {
-                it.signInCode = 1
-                it.signInTime = signInTime
-                it.sumSignInDays = sumSignInDay
-                it.newPanNumber = panResult.second
+            signInResult.apply {
+                signInCode = 1
+                this.signInTime = signInTime
+                sumSignInDays = sumSignInDay
+                newPanNumber = panResult.newPanNumber
             }
-            returnResult
         } else {
             sumSignInDay += 1
-            mocaDB.setConfig(userId, "USER", "signin_time", signInTime)
-            mocaDB.setConfig(userId, "USER", "sum_day", sumSignInDay)
-            val panResult = panNumberModify(userId, 5)
+            moca.setUserConfig(userId, "signin_time", signInTime)
+            moca.setUserConfig(userId, "sum_day", sumSignInDay)
+            val panResult = pan.modifyUserPan(userId, 5)
             mocaLog("UserSignIn", targetId = userId,
                 description = "firstTime = False, sumSignInDay = $sumSignInDay, userOwnPan = $userOwnPan")
-            val returnResult = SignInResult()
-            returnResult.let {
-                it.signInCode = 0
-                it.signInTime = signInTime
-                it.sumSignInDays = sumSignInDay
-                it.newPanNumber = panResult.second
+            signInResult.apply {
+                signInCode = 0
+                this.signInTime = signInTime
+                sumSignInDays = sumSignInDay
+                newPanNumber = panResult.newPanNumber
             }
-            returnResult
         }
     }
 
@@ -585,31 +525,31 @@ class Moca {
      * @return arrayListOf(状态, 抽签时间/上次抽签时间, 今日运势, 今日幸运数字, lpImagePath)
      */
     fun userDraw(userId: Long, groupId: Long): DrawResult {
-        val tempDrawTime = mocaDB.getUserConfig(userId, "draw_time").toString()
+        val tempDrawTime = mocaDB.getUserConfig(userId, "draw_time")
         val lastDrawTime: Long
         if (!tempDrawTime.isNotFound()) {
             lastDrawTime = tempDrawTime.toLong()
             if (lastDrawTime > getTimestampStartOfToday() && lastDrawTime < getTimestampEndOfToday()) {
-                val todayDrawStatus = mocaDB.getUserConfig(userId, "today_draw_status").toString()
-                val todayLuckyNumber = mocaDB.getUserConfig(userId, "today_lucky_num").toString().toInt()
-                val returnData = DrawResult()
-                returnData.apply {
+                val todayDrawStatus = mocaDB.getUserConfig(userId, "today_draw_status")
+                val todayLuckyNumber = mocaDB.getUserConfigInt(userId, "today_lucky_num")
+                val drawResult = DrawResult()
+                drawResult.apply {
                     drawCode = -1
                     drawTime = lastDrawTime
                     luckString = todayDrawStatus
                     luckyNumber = todayLuckyNumber
                 }
-                return returnData
+                return drawResult
             }
         }
-        val usePanResult = panNumberModify(userId, -2)
-        if (!usePanResult.first) {
-            val returnData = DrawResult()
-            returnData.apply {
+        val usePanResult = pan.modifyUserPan(userId, -2)
+        if (!usePanResult.status) {
+            val drawResult = DrawResult()
+            drawResult.apply {
                 drawCode = -2
                 drawTime = 0
             }
-            return returnData
+            return drawResult
         }
         val drawTime = System.currentTimeMillis() / 1000
         val luckyNumber = (1..10).random()
@@ -628,23 +568,24 @@ class Moca {
         } else {
             ""
         }
-        mocaDB.setConfig(userId, "USER", "draw_time", drawTime)
-        mocaDB.setConfig(userId, "USER", "today_draw_status", luckString)
-        mocaDB.setConfig(userId, "USER", "today_lucky_num", luckyNumber)
+        moca.setUserConfig(userId, "draw_time", drawTime)
+        moca.setUserConfig(userId, "today_draw_status", luckString)
+        moca.setUserConfig(userId, "today_lucky_num", luckyNumber)
+
         mocaLog("UserDraw", groupId = groupId, targetId = userId,
             description = "luck = {$luckString}, luck_num = {$luckyNumber} lp = {$pictureFile}")
-        val returnData = DrawResult()
-        returnData.let {
-            it.drawCode = 0
-            it.drawTime = drawTime
-            it.luckString = luckString
-            it.luckyNumber = luckyNumber
-            it.pictureFile = pictureFile
+        val drawResult = DrawResult()
+        drawResult.apply {
+            drawCode = 0
+            this.drawTime = drawTime
+            this.luckString = luckString
+            this.luckyNumber = luckyNumber
+            this.pictureFile = pictureFile
         }
-        return returnData
+        return drawResult
     }
 
-    fun keywordEdit(groupId: Long, paras: List<String>, operation: String = "ADD"): MessageChain {
+    fun keywordEdit(groupId: Long, paras: List<String>, operation: String): MessageChain {
         val groupKeyword = getGroupKeyword(groupId).toMutableMap()
         val (name, key) = paras
         if (name !in groupKeyword.keys) {
@@ -720,6 +661,93 @@ class Moca {
         return PlainText(result).toMessageChain()
     }
 
+    fun reloadAllGroupKeyword (): String {
+        mocaDB.loadAllGroupKeyword()
+        mocaLog("GroupReloadAllKeyword", description = "success")
+        return "success"
+    }
+
+    fun isReachedMessageLimit(groupId: Long): Boolean {
+        mocaLogger.debug("$groupId: message limit remain: ${mapGroupFrequencyLimiter[groupId]}")
+        return mapGroupFrequencyLimiter[groupId] == 0
+    }
+
+    /**
+     * 发送语音
+     */
+    suspend fun sendVoice(event: GroupMessageEvent) {
+        val voiceFolder = File("resource" + File.separator + "voice")
+        val voiceFiles = voiceFolder.listFiles()
+        if (!voiceFiles.isNullOrEmpty()) {
+            val voiceFile = File(voiceFiles.random().absolutePath).toExternalResource()
+            voiceFile.use {
+                event.subject.uploadAudio(voiceFile).sendTo(event.group)
+            }
+        }
+    }
+
+    // fun testFunction(){ }
+
+    fun setUserConfig(userId: Long, arg: String, value: Any): Boolean {
+        return mocaDB.setConfig(userId, "USER", arg, value)
+    }
+
+    class Pan{
+        /**
+         * 设置用户面包数量
+         *
+         * @param userId 用户QQ号
+         * @param panNumber 要设置的面包数量
+         *
+         * @return true/false(成功/失败)
+         */
+        fun setUserPan(userId: Long, panNumber: Int): Boolean {
+            return moca.setUserConfig(userId, "pan", panNumber)
+        }
+
+        /**
+         * 改变用户面包数量
+         *
+         * @param userId 用户QQ号
+         * @param delta 要增加/减少(以负数)的面包数量
+         *
+         * @return PanModifyResult
+         */
+        fun modifyUserPan(userId: Long, delta: Int): PanModifyResult {
+            val userPan = getUserPan(userId)
+            val modfiyResult = PanModifyResult()
+            return if (delta > 0) {
+                setUserPan(userId, userPan + delta)
+                mocaLog("UserPanNumChange", targetId = userId, description = "$delta")
+                modfiyResult.apply {
+                    status = true
+                    newPanNumber = getUserPan(userId)
+                }
+            } else {
+                if (-delta > userPan) {
+                    mocaLogger.warn("$userId: Pan not enough($userPan < ${-delta})")
+                    modfiyResult.apply {
+                        status = false
+                        newPanNumber = userPan
+                    }
+                } else {
+                    setUserPan(userId, userPan + delta)
+                    mocaLog("UserPanNumChange", targetId = userId, description = "$delta")
+                    modfiyResult.apply {
+                        status = true
+                        newPanNumber = getUserPan(userId)
+                    }
+                }
+            }
+        }
+
+        fun getUserPan(userId: Long): Int {
+            return mocaDB.getUserConfigInt(userId, "pan")
+        }
+    }
+}
+
+class GroupPicture{
     /**
      * 提交群图片
      *
@@ -752,6 +780,9 @@ class Moca {
         }
     }
 
+    /**
+     * 根据ID删除图片
+     */
     fun deleteGroupPicById(groupId: Long, picId: Int): String {
         val currentPic = getGroupPicById(groupId, picId)
         if (!currentPic.isEmpty()) {
@@ -778,13 +809,21 @@ class Moca {
 
     }
 
-
+    /**
+     * 匹配群关键词
+     */
     fun matchGroupPicKey(groupId: Long, messageContent: String): Boolean {
         val groupPicKeys = mocaDB.getGroupPicKeywords(groupId)
-        if (groupPicKeys == "") { return false }
-        return Regex(groupPicKeys).find(messageContent.lowercase()) != null
+        return if (groupPicKeys == "") {
+            false
+        }else{
+            Regex(groupPicKeys).find(messageContent.lowercase()) != null
+        }
     }
 
+    /**
+     * 编辑群关键词
+     */
     fun editGroupPicKeys(groupId: Long, key: String, operation: String = "ADD"): MessageChain {
         val groupPicKeys = mocaDB.getGroupPicKeywords(groupId)
         val keysList = groupPicKeys.split("|").toMutableList()
@@ -816,7 +855,10 @@ class Moca {
         return PlainText("NO OPERATION").toMessageChain()
     }
 
-    fun getGroupPicById(groupId: Long, picId: Int): Document {
+    /**
+     * 根据ID获取群图片
+     */
+    private fun getGroupPicById(groupId: Long, picId: Int): Document {
         val currentPics = mocaDB.getCurrentPics(groupId)
         val queryPic = currentPics[picId.toString()]
         return if (queryPic != null) {
@@ -826,16 +868,27 @@ class Moca {
         }
     }
 
-    fun reloadAllGroupKeyword (): String {
-        mocaDB.loadAllGroupKeyword()
-        mocaLog("GroupReloadAllKeyword", description = "success")
-        return "success"
+    /**
+     * 发送群图片.
+     */
+    suspend fun sendGroupPicture(event: GroupMessageEvent, picId: Int = -1) {
+        val groupPicFolderString = "resource${Slash}group_pic${Slash}${event.group.id}${Slash}"
+        if (picId == -1) {
+            val groupPicFolder = File(groupPicFolderString)
+            val groupPics = groupPicFolder.listFiles()
+            if (!groupPics.isNullOrEmpty()) {
+                File(groupPics.random().absolutePath).sendAsImageTo(event.group)
+            } else {
+                event.group.sendMessage("群图片为空，请发送【使用说明】查看添加方法.")
+            }
+        } else {
+            val toSendPic = getGroupPicById(event.group.id, picId)
+            if (!toSendPic.isEmpty()) {
+                File(groupPicFolderString + toSendPic["name"])
+                    .sendAsImageTo(event.group)
+            } else {
+                event.group.sendMessage("指定ID=${picId}的图片不存在.")
+            }
+        }
     }
-
-    fun isReachedMessageLimit(groupId: Long): Boolean {
-        mocaLogger.debug("$groupId: message limit remain: ${mapGroupFrequencyLimiter[groupId]}")
-        return mapGroupFrequencyLimiter[groupId] == 0
-    }
-
-    // fun testFunction(){ }
 }

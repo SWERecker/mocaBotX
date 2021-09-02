@@ -50,7 +50,7 @@ object MocaWithConfig {
 
         bot.eventChannel.subscribeAlways<BotJoinGroupEvent> {
             mocaLogger.info("${group.id}: Bot join new group. Init group")
-            moca.initGroup(group.id)
+            mocaDB.dbInitGroup(group.id)
             group.sendMessage("大家好，我是moca\n使用说明：https://mocabot.cn/\n请仔细查看使用说明并按照格式使用哦！")
         }
 
