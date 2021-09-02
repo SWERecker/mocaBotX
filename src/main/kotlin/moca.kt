@@ -200,7 +200,7 @@ class Moca {
             keyList.forEach {
                 val similarity = matchString.compareString(it, lpName)
                 if (similarity > 0.5) {
-                    println("$it, $lpName 相似度：$similarity")
+                    mocaLogger.debug("$it, $lpName 相似度：$similarity")
                     matchResult[name] = similarity
                 }
             }
@@ -593,11 +593,11 @@ class Moca {
                 val todayDrawStatus = mocaDB.getUserConfig(userId, "today_draw_status").toString()
                 val todayLuckyNumber = mocaDB.getUserConfig(userId, "today_lucky_num").toString().toInt()
                 val returnData = DrawResult()
-                returnData.let {
-                    it.drawCode = -1
-                    it.drawTime = lastDrawTime
-                    it.luckString = todayDrawStatus
-                    it.luckyNumber = todayLuckyNumber
+                returnData.apply {
+                    drawCode = -1
+                    drawTime = lastDrawTime
+                    luckString = todayDrawStatus
+                    luckyNumber = todayLuckyNumber
                 }
                 return returnData
             }
@@ -605,9 +605,9 @@ class Moca {
         val usePanResult = panNumberModify(userId, -2)
         if (!usePanResult.first) {
             val returnData = DrawResult()
-            returnData.let {
-                it.drawCode = -2
-                it.drawTime = 0
+            returnData.apply {
+                drawCode = -2
+                drawTime = 0
             }
             return returnData
         }
@@ -635,7 +635,7 @@ class Moca {
             description = "luck = {$luckString}, luck_num = {$luckyNumber} lp = {$pictureFile}")
         val returnData = DrawResult()
         returnData.let {
-            it.drawCode = -1
+            it.drawCode = 0
             it.drawTime = drawTime
             it.luckString = luckString
             it.luckyNumber = luckyNumber
