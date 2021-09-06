@@ -498,7 +498,7 @@ class MocaGroupMessage(
     private suspend fun supermanOperations(): Boolean {
         when (messageContent) {
             "RELOAD_REDIS" -> {
-                val reloadResult = loadIndexFile()
+                val reloadResult = mocaDB.loadIndexFile()
                 val resultMessage = "Superman: Reload redis, current count=$reloadResult"
                 mocaLogger.debug(resultMessage)
                 subj.sendMessage(resultMessage)
@@ -996,6 +996,7 @@ class MocaGroupMessage(
                             buildMessageChain {
                                 +At(senderId)
                                 +PlainText(" ${greetWord}\n${signIn.signInTime.toDateStr()} 签到成功！")
+                                +PlainText("\n你是今天第${signIn.numberOfDay}个签到的呢~")
                                 +PlainText("\n累计签到${signIn.sumSignInDays}天，你现在有${signIn.newPanNumber}个面包啦~\n")
                                 +PlainText(weatherText)
                             }
@@ -1004,6 +1005,7 @@ class MocaGroupMessage(
                             buildMessageChain {
                                 +At(senderId)
                                 +PlainText(" ${greetWord}\n${signIn.signInTime.toDateStr()} 签到成功~")
+                                +PlainText("\n你是今天第${signIn.numberOfDay}个签到的呢~")
                                 +PlainText("\n初次签到，摩卡给你5个面包哦~")
                                 +PlainText("\n以后每天都可以签一次到哦~有空的话每天都来签到吧~")
                                 +PlainText("\n你现在有${signIn.newPanNumber}个面包啦~")

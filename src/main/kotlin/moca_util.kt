@@ -253,6 +253,11 @@ class SignInResult {
      */
     var newPanNumber = 0
 
+    /**
+     * 今日第x个签到
+     */
+    var numberOfDay = 0
+
 }
 
 class DrawResult {

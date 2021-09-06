@@ -469,49 +469,54 @@ class MocaDatabase {
             mocaDBLogger.info("User $userId clp_time + $delta, modified count = ${updateResult.modifiedCount}")
         }
     }
-
-}
-
-/**
- * 从index.txt加载所有图片路径至Redis数据库
- */
-fun loadIndexFile(): Int {
-    redisPool.resource.use { r ->
-        r.select(3)
-        r.flushDB()
-        val indexFilePath = picturePath + "index.txt"
-        val inStream: InputStream = File(indexFilePath).inputStream()
-        inStream.bufferedReader().useLines { lines ->
-            lines.forEach {
-                if(!it.startsWith("-")) {
-                    val line = it.split('|')
-                    val filePath = picturePath + line[0]
-                    val categories = line[1].split(' ')
-                    categories.forEach { category ->
-                        r.sadd(category, filePath)
+    /**
+     * 从index.txt加载所有图片路径至Redis数据库
+     */
+    fun loadIndexFile(): Long? {
+        redisPool.resource.use { r ->
+            r.select(3)
+            r.flushDB()
+            val indexFilePath = picturePath + "index.txt"
+            val inStream: InputStream = File(indexFilePath).inputStream()
+            inStream.bufferedReader().useLines { lines ->
+                lines.forEach {
+                    if(!it.startsWith("-")) {
+                        val line = it.split('|')
+                        val filePath = picturePath + line[0]
+                        val categories = line[1].split(' ')
+                        categories.forEach { category ->
+                            r.sadd(category, filePath)
+                        }
                     }
                 }
             }
+            return r.dbSize()
         }
-        var peopleCount = 0
-        r.keys("*").forEach { _ ->
-            peopleCount++
-        }
-        return peopleCount
     }
-}
 
-/**
- * 记录日志
- */
-fun mocaLog(eventName: String, targetId: Long = 0L, groupId: Long = 0L, description: String = "-") {
-    val logTime = System.currentTimeMillis() / 1000
-    val query = Document()
-        .append("time", logTime)
-        .append("time_string", logTime.toDateStr())
-        .append("event", eventName)
-        .append("group", groupId)
-        .append("target", targetId)
-        .append("description", description)
-    colMocaLog.insertOne(query)
+    /**
+     * 今日签到人数+1
+     */
+    fun incUserSignInCount(): Int {
+        val dateString = (System.currentTimeMillis() / 1000).toDateStr("yyyyMMdd")
+        redisPool.resource.use { r ->
+            r.select(4)
+            return r.incr("${dateString}_signin").toString().toInt()
+        }
+    }
+
+    /**
+     * 记录日志
+     */
+    fun mocaLog(eventName: String, targetId: Long = 0L, groupId: Long = 0L, description: String = "-") {
+        val logTime = System.currentTimeMillis() / 1000
+        val query = Document()
+            .append("time", logTime)
+            .append("time_string", logTime.toDateStr())
+            .append("event", eventName)
+            .append("group", groupId)
+            .append("target", targetId)
+            .append("description", description)
+        colMocaLog.insertOne(query)
+    }
 }

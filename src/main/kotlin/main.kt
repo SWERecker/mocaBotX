@@ -59,7 +59,7 @@ object MocaWithConfig {
             if (moca.isSuperman(member.id)) {
                 group.sendMessage("开发者${member.id}被移除，自动退出群组...")
                 mocaLogger.warn("${group.id}: Superman left")
-                mocaLog("SupermanLeaveEvent", groupId = groupId,
+                mocaDB.mocaLog("SupermanLeaveEvent", groupId = groupId,
                     description = "memberId = ${member.id}")
                 group.quit()
             }
@@ -79,7 +79,7 @@ object MocaWithConfig {
 
         bot.eventChannel.subscribeAlways<BotInvitedJoinGroupRequestEvent> {
             mocaLogger.debug("$groupId: Invited to join group.")
-            mocaLog("BotInvitedJoinGroupRequestEvent", groupId = groupId,
+            mocaDB.mocaLog("BotInvitedJoinGroupRequestEvent", groupId = groupId,
                 description = "invitorId = $invitorId")
             if (moca.isSuperman(invitorId)) {
                 mocaLogger.info("Superman invited to join group. Auto accept.")
@@ -88,7 +88,7 @@ object MocaWithConfig {
         }
 
         bot.eventChannel.subscribeAlways<BotLeaveEvent> {
-            mocaLog("BotLeaveEvent", groupId = group.id)
+            mocaDB.mocaLog("BotLeaveEvent", groupId = group.id)
         }
 
         bot.eventChannel.subscribeAlways<GroupMessagePostSendEvent> {
