@@ -47,8 +47,7 @@ fun cityLookup(paraList: List<String>): MutableMap<String, String>{
     reqBuilder.get()
     val call = client.newCall(reqBuilder.build())
     try {
-        val response = call.execute().body!!.string()
-        val jsonMap = jsonStringToMap(response)
+        val jsonMap = call.execute().body!!.string().jsonToMap()
         returnMap["code"] = jsonMap["code"].toString()
         if (jsonMap["code"].toString() == "200") {
             val locations = jsonMap["location"] as List<*>
@@ -82,8 +81,7 @@ fun weatherLookup(cityId: String, whichDayIn3Days: Int = 1): WeatherData {
     reqBuilder.get()
     val we3DCall = client.newCall(reqBuilder.build())
     try {
-        val response = we3DCall.execute().body!!.string()
-        val jsonMap = jsonStringToMap(response)
+        val jsonMap = we3DCall.execute().body!!.string().jsonToMap()
         wData.code = jsonMap["code"].toString()
         if (jsonMap["code"].toString() == "200") {
             val weather3D = jsonMap["daily"] as List<*>
@@ -116,8 +114,7 @@ fun weatherLookup(cityId: String, whichDayIn3Days: Int = 1): WeatherData {
     reqBuilder.get()
     val weNowCall = client.newCall(reqBuilder.build())
     try {
-        val response = weNowCall.execute().body!!.string()
-        val jsonMap = jsonStringToMap(response)
+        val jsonMap = weNowCall.execute().body!!.string().jsonToMap()
         wData.code = jsonMap["code"].toString()
         if (jsonMap["code"].toString() == "200") {
             val weatherNow = jsonMap["now"] as Map<*, *>

@@ -1,16 +1,19 @@
 package me.swe.main
 
-import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.LongSerializationPolicy
 import com.google.gson.reflect.TypeToken
 import java.io.*
+import java.math.BigDecimal
 import java.net.URL
+import java.net.URLConnection
+import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.time.ZoneId
-import java.util.*
-import kotlin.Comparator
 import java.time.ZonedDateTime
-import java.net.URLConnection
+import java.util.*
 import java.util.regex.Pattern
+
 
 val protectedKeys = arrayListOf(
     "关键词", "统计图片数量", "统计次数", "语音",
@@ -24,6 +27,7 @@ val Slash: String = File.separator
 
 val mocaDB = MocaDatabase()
 val moca = Moca()
+val apex = Apex()
 
 /**
  * 字符串相似度计算
@@ -222,14 +226,25 @@ fun getBotConfig(arg: String): String {
 
 /**
  * 将Json转换为Map<String?, Any?>
- *
- *  @param sourceJson 来源JSON
- *
  *  @return Map<String?, Any?>
  */
-fun jsonStringToMap(sourceJson: String): Map<String?, Any?> {
-    val gson = Gson()
-    return gson.fromJson(sourceJson, object: TypeToken<Map<String?, Any?>?>() {}.type)
+fun String.jsonToMap(): Map<String?, Any?> {
+    val gson = GsonBuilder()
+        .setLongSerializationPolicy(LongSerializationPolicy.STRING)
+        .create()
+    return gson.fromJson(this, object: TypeToken<Map<String?, Any?>?>() {}.type)
+}
+
+fun String.sciToLong(): Long {
+    val num = BigDecimal(this)
+    val df = DecimalFormat("0")
+    return df.format(num).toLong()
+}
+
+fun String.sciToInt(): Int {
+    val num = BigDecimal(this)
+    val df = DecimalFormat("0")
+    return df.format(num).toInt()
 }
 
 class SignInResult {

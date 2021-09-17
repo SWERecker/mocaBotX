@@ -102,8 +102,11 @@ class MocaGroupMessage(
                 subj.sendMessage("错误，你至少需要包含一张图片")
                 return
             }
-            subj.sendMessage(moca.submitPictures(groupId,
-                event.message.filterIsInstance<Image>(), category)
+            subj.sendMessage(
+                moca.submitPictures(
+                    groupId,
+                    event.message.filterIsInstance<Image>(), category
+                )
             )
             return
         }
@@ -112,12 +115,25 @@ class MocaGroupMessage(
         if (!moca.isInCd(groupId, "replyCD")) {
             when {
                 messageContent.contains("使用说明") -> {
-                    subj.sendMessage("使用说明：https://mocabot.cn/")
+                    subj.sendMessage("使用说明: https://mocabot.cn/")
                     moca.setCd(groupId, "replyCD")
                     return
                 }
                 messageContent.contains("青年大学习") -> {
                     subj.sendMessage(getBotConfig("QNDXX"))
+                    moca.setCd(groupId, "replyCD")
+                    return
+                }
+            }
+
+            when (messageContent) {
+                "查看图库" -> {
+                    subj.sendMessage("图库: https://image.mocabot.cn/")
+                    moca.setCd(groupId, "replyCD")
+                    return
+                }
+                "/remake" -> {
+                    subj.sendMessage("https://liferestart.mocabot.cn/")
                     moca.setCd(groupId, "replyCD")
                     return
                 }
@@ -184,12 +200,15 @@ class MocaGroupMessage(
             }
 
             // “!”消息处理器
+
             if (messageContent.startsWith("!") || messageContent.startsWith("！")
             ) {
-                exclamationMarkProcessor().also {
-                    if (it) {
-                        moca.setCd(groupId, "replyCD")
-                        return
+                if (moca.groupConfigEnabled(groupId, "command")) {
+                    exclamationMarkProcessor().also {
+                        if (it) {
+                            moca.setCd(groupId, "replyCD")
+                            return
+                        }
                     }
                 }
             }
@@ -203,7 +222,7 @@ class MocaGroupMessage(
                     .replace("\n", "")
                 val picId = try {
                     tempId.toInt()
-                }catch (e: NumberFormatException) {
+                } catch (e: NumberFormatException) {
                     subj.sendMessage("错误：ID有误")
                     return
                 }
@@ -405,7 +424,7 @@ class MocaGroupMessage(
                 return if (groupPicKeys == "") {
                     subj.sendMessage("群关键词为空.")
                     true
-                }else {
+                } else {
                     subj.sendMessage("群关键词：$groupPicKeys")
                     true
                 }
@@ -458,15 +477,18 @@ class MocaGroupMessage(
                 .replace("\n", "")
             val picId = try {
                 tempId.toInt()
-            }catch (e: NumberFormatException) {
+            } catch (e: NumberFormatException) {
                 -1
             }
             if (!event.message.contains(Image)) {
                 subj.sendMessage("错误：你需要包含一张图片")
                 return true
             }
-            subj.sendMessage(moca.groupPicture.submitGroupPictures(groupId,
-                event.message.filterIsInstance<Image>(), picId)
+            subj.sendMessage(
+                moca.groupPicture.submitGroupPictures(
+                    groupId,
+                    event.message.filterIsInstance<Image>(), picId
+                )
             )
             return true
         }
@@ -479,7 +501,7 @@ class MocaGroupMessage(
                 .replace("\n", "")
             val picId = try {
                 tempId.toInt()
-            }catch (e: NumberFormatException) {
+            } catch (e: NumberFormatException) {
                 -1
             }
             moca.groupPicture.deleteGroupPicById(groupId, picId).also {
@@ -510,7 +532,7 @@ class MocaGroupMessage(
                 return true
             }
         }
-        when{
+        when {
             messageContent.startsWith("SET_PAN") -> {
                 val paras = messageContent
                     .replace(" ", "")
@@ -534,23 +556,24 @@ class MocaGroupMessage(
                     .substring(5)
                     .trim()
                     .split(',')
-                fun argConvert(arg: String): Pair<String, Any>{
-                   return when(arg){
+
+                fun argConvert(arg: String): Pair<String, Any> {
+                    return when (arg) {
                         "SIGNIN" -> {
                             Pair("signin_time", 0L)
                         }
-                       "DRAW" -> {
-                           Pair("draw_time", 0L)
-                       }
-                       "BUY_PAN" -> {
-                           Pair("last_buy_time", 0L)
-                       }
-                       "CLP_TIMES" -> {
-                           Pair("clp_time", 0)
-                       }
-                       else -> {
-                           Pair("", 0L)
-                       }
+                        "DRAW" -> {
+                            Pair("draw_time", 0L)
+                        }
+                        "BUY_PAN" -> {
+                            Pair("last_buy_time", 0L)
+                        }
+                        "CLP_TIMES" -> {
+                            Pair("clp_time", 0)
+                        }
+                        else -> {
+                            Pair("", 0L)
+                        }
                     }
                 }
                 when (paras.size) {
@@ -563,7 +586,7 @@ class MocaGroupMessage(
                         userId = senderId
                         toResetArg = resetParam.first
                         initValue = resetParam.second
-                        }
+                    }
                     2 -> {
                         try {
                             userId = paras[0].toLong()
@@ -624,7 +647,7 @@ class MocaGroupMessage(
         var panResult = ""
         var pictureCount = 1
         if (imageParameter.second) {
-           panResult = moca.eatPan(senderId, 3).let {
+            panResult = moca.eatPan(senderId, 3).let {
                 if (it.status) {
                     pictureCount = 2
                     "摩卡吃掉了3个面包，你还剩${it.newPanNumber}个面包哦~"
@@ -819,7 +842,7 @@ class MocaGroupMessage(
                 var cityName = ""
                 var cityAdm = ""
                 var cityCountry = ""
-                when(paraList.size) {
+                when (paraList.size) {
                     1 -> {
                         cityId = mocaDB.getUserConfig(senderId, "loc_id")
                         if (cityId == "") {
@@ -863,12 +886,57 @@ class MocaGroupMessage(
                         +PlainText("\n${wData.fxDate} $cityName, $cityAdm, ${cityCountry}的天气\n")
                         +PlainText("当前${wData.textNow}，温度${wData.tempNow}℃，体感温度${wData.tempFeelsLike}℃。\n")
                         +PlainText("今日温度${wData.tempMin}℃ ~ ${wData.tempMax}℃。\n")
-                        +PlainText("今日白天${wData.textDay}，${wData.windDirDay}${wData.windScaleDay}级，" +
-                                "夜晚${wData.textNight}，${wData.windDirNight}${wData.windScaleNight}级，" +
-                                "湿度${wData.humidity}%。\n")
+                        +PlainText(
+                            "今日白天${wData.textDay}，${wData.windDirDay}${wData.windScaleDay}级，" +
+                                    "夜晚${wData.textNight}，${wData.windDirNight}${wData.windScaleNight}级，" +
+                                    "湿度${wData.humidity}%。\n"
+                        )
                     }
                 )
                 return true
+            }
+            "apex" -> {
+                paraList.drop(1).also {
+                    val apexMaps = apex.getMapsInfo()
+                    if (it.first() == "map") {
+                        subj.sendMessage(
+                            when (it.size) {
+                                1 -> {
+                                    "Apex英雄地图轮换查询：\n" +
+                                            "大逃杀：当前是\"${apexMaps.brCurrentMap}\"，${apexMaps.brRemainingMins}分钟后轮换为\"${apexMaps.brNextMap}\"\n" +
+                                            "竞技场：当前是\"${apexMaps.arCurrentMap}\"，${apexMaps.arRemainingMins}分钟后轮换为\"${apexMaps.arNextMap}\"\n"
+                                }
+                                2 -> {
+                                    when (it[1]) {
+                                        "br" -> {
+                                            "Apex英雄大逃杀轮换查询：\n" +
+                                                    "当前是\"${apexMaps.brCurrentMap}\"，开始时间：${apexMaps.brCurrentStartTime.toDateStr()}，" +
+                                                    "结束时间：${apexMaps.brCurrentEndTime.toDateStr()}，" +
+                                                    "倒计时：${apexMaps.brRemainingTimer}\n" +
+                                                    "下一张：\"${apexMaps.brNextMap}\"，持续${apexMaps.brNextDurationMins}分钟\n\n" +
+                                                    "排位赛：当前是\"${apexMaps.rkCurrentMap}\"，下一张是\"${apexMaps.rkNextMap}\""
+                                        }
+                                        "arena" -> {
+                                            "Apex英雄竞技场轮换查询：\n" +
+                                                    "当前是\"${apexMaps.arCurrentMap}\"，开始时间：${apexMaps.arCurrentStartTime.toDateStr()}，" +
+                                                    "结束时间：${apexMaps.arCurrentEndTime.toDateStr()}，" +
+                                                    "倒计时：${apexMaps.arRemainingTimer}\n" +
+                                                    "下一张：\"${apexMaps.arNextMap}\"，持续${apexMaps.arNextDurationMins}分钟\n\n" +
+                                                    "竞技场排位赛：当前是\"${apexMaps.rarCurrentMap}\"，开始时间：${apexMaps.rarCurrentStartTime.toDateStr()}，" +
+                                                    "结束时间：${apexMaps.rarCurrentEndTime.toDateStr()}\n" +
+                                                    "下一张是\"${apexMaps.rarNextMap}\"，持续${apexMaps.rarNextDurationMins}分钟"
+                                        }
+                                        else -> "用法：!apex map (br|arena)"
+                                    }
+                                }
+                                else -> {
+                                    "用法：!apex map (br|arena)"
+                                }
+                            }
+                        )
+                        return true
+                    }
+                }
             }
         }
         return false
@@ -903,8 +971,10 @@ class MocaGroupMessage(
                         subj.sendMessage(
                             buildMessageChain {
                                 +At(senderId)
-                                +PlainText(" 成功购买了${buyResult.buyNumber}个面包，" +
-                                        "你现在有${buyResult.newPanNumber}个面包啦~")
+                                +PlainText(
+                                    " 成功购买了${buyResult.buyNumber}个面包，" +
+                                            "你现在有${buyResult.newPanNumber}个面包啦~"
+                                )
                             }
                         )
                         return true
@@ -930,12 +1000,12 @@ class MocaGroupMessage(
                         +At(senderId)
                         +PlainText(
                             moca.eatPan(senderId, 1).let {
-                            if (it.status) {
-                                " 你吃掉了1个面包，还剩${it.newPanNumber}个面包了哦~"
-                            } else {
-                                " 呜呜呜，面包不够吃了呢..."
-                            }
-                        })
+                                if (it.status) {
+                                    " 你吃掉了1个面包，还剩${it.newPanNumber}个面包了哦~"
+                                } else {
+                                    " 呜呜呜，面包不够吃了呢..."
+                                }
+                            })
                     }
                 )
                 return true
@@ -945,7 +1015,7 @@ class MocaGroupMessage(
                 val signInHour = signIn.signInTime.toDateStr("HH").toInt()
                 val cityId = mocaDB.getUserConfig(senderId, "loc_id")
                 var weatherText = ""
-                if(cityId != "NOT_FOUND") {
+                if (cityId != "NOT_FOUND") {
                     val location = mocaDB.getUserConfig(senderId, "loc_name")
                     weatherText = when {
                         (signInHour in 0..17) -> {
@@ -960,12 +1030,12 @@ class MocaGroupMessage(
                         }
                     }
                 }
-                val greetWord: String = when(signInHour){
+                val greetWord: String = when (signInHour) {
                     in (0..3) -> {
                         "夜深了..."
                     }
                     in (4..6) -> {
-                         "清晨了~"
+                        "清晨了~"
                     }
                     in (7..10) -> {
                         "上午好！"
