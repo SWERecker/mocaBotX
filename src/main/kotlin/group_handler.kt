@@ -113,17 +113,10 @@ class MocaGroupMessage(
 
         // 使用说明/青年大学习
         if (!moca.isInCd(groupId, "replyCD")) {
-            when {
-                messageContent.contains("使用说明") -> {
-                    subj.sendMessage("使用说明: https://mocabot.cn/")
-                    moca.setCd(groupId, "replyCD")
-                    return
-                }
-                messageContent.contains("青年大学习") -> {
-                    subj.sendMessage(getBotConfig("QNDXX"))
-                    moca.setCd(groupId, "replyCD")
-                    return
-                }
+            if (messageContent.contains("使用说明")) {
+                subj.sendMessage("使用说明: https://mocabot.cn/")
+                moca.setCd(groupId, "replyCD")
+                return
             }
 
             when (messageContent) {
@@ -134,6 +127,11 @@ class MocaGroupMessage(
                 }
                 "/remake" -> {
                     subj.sendMessage("https://liferestart.mocabot.cn/")
+                    moca.setCd(groupId, "replyCD")
+                    return
+                }
+                "青年大学习" -> {
+                    subj.sendMessage(getBotConfig("QNDXX"))
                     moca.setCd(groupId, "replyCD")
                     return
                 }

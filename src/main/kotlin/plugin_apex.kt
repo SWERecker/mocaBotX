@@ -27,7 +27,7 @@ class Apex {
         val call = client.newCall(reqBuilder.build())
         return try {
             val jsonMap = call.execute().body!!.string().jsonToMap()
-            println(jsonMap)
+            // println(jsonMap)
 
             val br = jsonMap["battle_royale"] as Map<*, *>
             val brCurrent = br["current"] as Map<*, *>
